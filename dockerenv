@@ -1,0 +1,8 @@
+# use an internal database
+# create tables
+DB_SYNC=True
+# use simple auth (each request gets a header of "x-auth-token: admin")
+AUTH_STRATEGY=noauth2
+# We need to use an external database. The interal sqlite3 database
+# can't handle any level of concurrency and has write locks.
+DB_STRING=postgresql+psycopg2://cdent@192.168.1.76/placement?client_encoding=utf8
