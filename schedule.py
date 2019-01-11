@@ -11,6 +11,7 @@ import requests
 # got one, raw.
 PREFIX = '/hosts'
 PLACEMENT = 'http://localhost:8080'
+IMAGE = 'cirros-0.3.5-x86_64-disk.img'
 
 client = etcd3.client()
 
@@ -53,7 +54,7 @@ def _schedule(session, data):
     # Not (yet) used.
     # provider_summaries = data['provider_summaries']
     consumer = str(uuid.uuid4())
-    image = str(uuid.uuid4())
+    image = IMAGE
     target = None
     while True:
         try:
