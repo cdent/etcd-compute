@@ -67,6 +67,7 @@ def _schedule(session, data):
             'allocations': first_allocation,
             'user_id': str(uuid.uuid4()),
             'project_id': str(uuid.uuid4()),
+            'consumer_generation': None,
         }
         url = '%s/allocations/%s' % (PLACEMENT, consumer)
         resp = session.put(url, json=claim)

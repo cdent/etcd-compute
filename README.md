@@ -39,7 +39,7 @@ inventory. Here we start ten of them in the background:
 
 ```
 for i in {1..10}; do \
-    python compute.py 'VCPU:4,DISK_GB:10,MEMORY_MB:512' & \
+    python compute.py 'VCPU:4,DISK_GB:10,MEMORY_MB:512' &> compute.$i.log & \
     sleep 5; done
 ```
 
@@ -49,7 +49,7 @@ Then we can try schedule a workload:
 python schedule.py 'resources=VCPU:1,DISK_GB:1,MEMORY_MB:5'
 ```
 
-The output will look something like this in `shedule.py`:
+The output will look something like this in `schedule.py`:
 
 ```
 NOTIFIED TARGET, b8756be5-a30d-4311-920c-0ad996367a8e, \
