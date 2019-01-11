@@ -1,5 +1,7 @@
 
 import json
+import shutil
+import subprocess
 import sys
 import time
 from threading import Event
@@ -69,7 +71,7 @@ def main_loop(compute_uuid):
                 _print('sleeping')
             _handle_new(our_key)
         except (Exception, KeyboardInterrupt) as e:
-            _print('FAIL: %s' % e)
+            _print('FAIL: %s, %s' % (type(e), e))
             client.cancel_watch(watch_id)
             return
 
@@ -85,7 +87,36 @@ def _handle_new(key):
     data = json.loads(value)
     _print('INSTANTIATE INSTANCE %(instance)s WITH IMAGE %(image)s' % data)
     _print('\tALLOCATIONS ARE %(allocations)s' % data)
+    _spawn(data)
     client.put('/booted/%(instance)s' % data, 'True')
+
+
+def _spawn(data):
+    image = data['image']
+    instance = data['instance']
+    allocations = data['allocations'][COMPUTE_UUID]['resources']
+    _print(allocations)
+    memory = allocations['MEMORY_MB']
+    dest = _copy_image(image, instance)
+    _print(dest)
+    args = [
+            'virt-install',
+            '--name', instance,
+            '--memory', str(memory),
+            '--disk', dest,
+            '--graphics', 'none',
+            '--import',
+            '--noautoconsole',
+            ]
+    _print('spawning %s' % args)
+    subprocess.Popen(args)
+    _print('spawned %s' % args)
+
+
+def _copy_image(source, instance):
+    dest = '%s.img' % instance
+    shutil.copyfile(source, dest)
+    return dest
 
 
 def _set_inventory(session, uuid, generation, inventory):
