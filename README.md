@@ -19,6 +19,9 @@ etcd as the main motors and state maintainers of a compute service
 and come to grips with some of the systems and process involved in
 creating virtual machines.
 
+It assumes you've got a working libvirt install, with `virt-install` and
+`virt-resize`.
+
 # Architecture
 
 The overall architecture of the system is as follows. An `etcd`
@@ -60,6 +63,7 @@ Edit `mdserver.conf` as required and start the metadata server with
 (this will be improved):
 
 ```
+sudo ip addr add 169.254.169.254 dev virbr0
 python md_server/mdserver/server.py mdserver.conf &
 ```
 
@@ -107,6 +111,13 @@ python schedule.py \
 NO ALLOCATIONS LEFT
 ```
 
+After an instance is booted its IP address is put back in etcd, which you can
+query by giving the instance uuid to schedule.py:
+
+```
+python schedule.py d578fb7c-7787-4e73-b69a-a7b3ef9bf73a
+```
+
 **Note**: The database and etcd data (in `/data/etcd`) are not
 cleaned up. You'll want to take care of that yourself.
 
@@ -116,22 +127,19 @@ cleaned up. You'll want to take care of that yourself.
   the compute.py should create the VMs image by pulling it and
   writing to an appropriate name. With
   [caching](https://cachecontrol.readthedocs.io/).
-* After the VM boots the IP should be written back to `etcd` and
-  `schedule.py` should be able to query for info on that instance,
-  and that instance's allocations.
 * Need some way to destroy an image, including cleaning up
   allocations. Presumably `schedule.py` can write to the appropriate
   key in `etcd` and a compute will see it and do the right thing.
 * On startup a compute should check to see if the metadata server is
   there, and if not, fork and start one.
-* VCPU requests should be handled when call virt-install.
-* Disk size is currently ignored. Is it right to resize images
-  before boot (with `virt-resize`)? If it is not ignored, then disk
-  allocations should be tracked properly.
+* Resizing disk images is currently done with multiple subprocess calls,
+  this is cumbersome and weird.
 * Can the experiment be made more robust/interesting by, when using
   more than one `compute.py` on the same physical host, reporting
   disk as a shared resource provider? Or would that be complicating
   things too much?
+* Switch all these subprocess calls to using the python libvirt
+  package directly.
 
 # Concepts
 

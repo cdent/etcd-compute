@@ -1,6 +1,7 @@
 
 import json
 import shutil
+import re
 import subprocess
 import sys
 import time
@@ -88,7 +89,9 @@ def _handle_new(key):
     _print('INSTANTIATE INSTANCE %(instance)s WITH IMAGE %(image)s' % data)
     _print('\tALLOCATIONS ARE %(allocations)s' % data)
     _spawn(data)
-    client.put('/booted/%(instance)s' % data, 'True')
+    ip_address = _get_ip(data['instance'])
+    print('\tIP is %s' % ip_address)
+    client.put('/booted/%(instance)s' % data, ip_address)
 
 
 def _spawn(data):
@@ -97,12 +100,15 @@ def _spawn(data):
     allocations = data['allocations'][COMPUTE_UUID]['resources']
     _print(allocations)
     memory = allocations['MEMORY_MB']
-    dest = _copy_image(image, instance)
+    vcpu = allocations['VCPU']
+    disk_size = allocations['DISK_GB']
+    dest = _copy_image(image, instance, disk_size)
     _print(dest)
     args = [
             'virt-install',
             '--name', instance,
             '--memory', str(memory),
+            '--vcpus', str(vcpu),
             '--disk', dest,
             '--graphics', 'none',
             '--import',
@@ -113,9 +119,32 @@ def _spawn(data):
     _print('spawned %s' % args)
 
 
-def _copy_image(source, instance):
+def _get_ip(instance):
+    while True:
+        try:
+            output = subprocess.check_output(['virsh', 'domifaddr', instance])
+            output = str(output)
+            _print(output)
+            output = output.replace('\n', ' ').rstrip()
+            output = output.split()[-1].split('/')[0]
+            if re.match(r'^\d+\.\d+\.\d+.\d+', output):
+                return output
+        except subprocess.CalledProcessError:
+            pass
+        time.sleep(1)
+
+
+def _copy_image(source, instance, size):
     dest = '%s.img' % instance
-    shutil.copyfile(source, dest)
+    # FIXME: error handling
+    # FIXME: we can't assume the filesystem, but for now we do.
+    env = {
+        'LIBGUESTFS_HV': '/tmp/qemu-wrapper.sh',
+    }
+    subprocess.check_call(['truncate', '-r', source, dest])
+    subprocess.check_call(['truncate', '-s', '%sG' % size, dest])
+    subprocess.check_call(['virt-resize', '--expand', '/dev/sda1',
+                           source, dest], env=env)
     return dest
 
 

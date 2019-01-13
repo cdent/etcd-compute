@@ -32,14 +32,24 @@ def schedule(session, resources):
         sys.exit(1)
 
 
+def query(instance):
+    """Get info about an instance from etcd."""
+    info, meta = client.get('/booted/%s' % instance)
+    print(info.decode('utf-8'))
+    sys.exit(0)
+
+
 def main(resources):
     """Establish session and call schedule."""
-    session = requests.Session()
-    session.headers.update({'x-auth-token': 'admin',
-                            'openstack-api-version': 'placement latest',
-                            'accept': 'application/json',
-                            'content-type': 'application/json'})
-    schedule(session, resources)
+    if 'resources' in resources:
+        session = requests.Session()
+        session.headers.update({'x-auth-token': 'admin',
+                                'openstack-api-version': 'placement latest',
+                                'accept': 'application/json',
+                                'content-type': 'application/json'})
+        schedule(session, resources)
+    else:
+        query(resources)
 
 
 def _schedule(session, data):
