@@ -1,5 +1,7 @@
 
-**Note**: This is a toy.
+**Note**: This is a toy. Be aware that the code and the README won't
+always be in sync, following the instructions will likely expose
+something that needs to be tweaked or fixed before things work.
 
 This repository provides a toy compute workload scheduler using
 OpenStack
@@ -21,7 +23,7 @@ creating virtual machines.
 
 It assumes you've got a working libvirt install, with `virt-install` and
 `virt-resize`. On ubuntu that means the `virtinst` and `libguestfs-tools`
-packages. **Note**: if this ever gets to be slightly more than a toy using
+packages. **Note**: If this ever gets to be slightly more than a toy using
 those command line tools should be changed to in-Python code.
 
 # Architecture
