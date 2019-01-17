@@ -11,7 +11,10 @@ from threading import Event
 from urllib import parse
 import uuid
 
+import cachecontrol
+from cachecontrol.caches import file_cache
 import etcd3
+import psutil
 import requests
 import yaml
 
@@ -19,6 +22,8 @@ KEY = '/hosts'
 SLEEP = 1
 COMPUTE_UUID = str(uuid.uuid4())
 CLIENT = None
+CACHED_SESSION = cachecontrol.CacheControl(
+    requests.Session(), cache=file_cache.FileCache('.web_cache'))
 
 
 # default config
@@ -45,7 +50,7 @@ def _print(output):
     print('%s: %s' % (COMPUTE_UUID, output))
 
 
-def main(config, inventory):
+def main(config):
     """Set up the resource provider for this compute and start
     the main loop.
     """
@@ -55,8 +60,8 @@ def main(config, inventory):
                             'accept': 'application/json',
                             'content-type': 'application/json'})
     # Inventory is "FOO:1,BAR:2, BAZ:8"
-    inventories = [inv.strip() for inv in inventory.split(',')]
-    inventory_dict = dict(inv.split(':') for inv in inventories)
+    inventory_dict = _calculate_inventory()
+    _print(inventory_dict)
 
     inventories_dict = {}
     for resource_class, value in inventory_dict.items():
@@ -69,6 +74,20 @@ def main(config, inventory):
     _set_inventory(session, COMPUTE_UUID, generation, inventories_dict)
 
     main_loop(COMPUTE_UUID)
+
+
+def _calculate_inventory():
+    cpu = psutil.cpu_count()
+    # We only measure this disk space of where we store images.
+    # Clearly disk in use matters here, but we don't know what's
+    # images and what's other stuff, so fake it for now.
+    disk = psutil.disk_usage('.').total // 1024 // 1024 // 1024
+    memory = psutil.virtual_memory().total // 1024 // 1024
+    return {
+        'VCPU': cpu,
+        'DISK_GB': disk,
+        'MEMORY_MB': memory,
+    }
 
 
 def main_loop(compute_uuid):
@@ -95,6 +114,7 @@ def main_loop(compute_uuid):
             _handle_new(our_key)
         except (Exception, KeyboardInterrupt) as e:
             _print('FAIL: %s, %s' % (type(e), e))
+            sys.excepthook(*sys.exc_info())
             CLIENT.cancel_watch(watch_id)
             return
 
@@ -157,16 +177,27 @@ def _get_ip(instance):
 
 
 def _copy_image(source, instance, size):
+    # source is expected to be a url
+    source_file = source.rsplit('/', 1)[1]
+    try:
+        os.unlink(source_file)
+    except FileNotFoundError:
+        pass
+    source_refresh = CACHED_SESSION.get(source, stream=True)
+    with open(source_file, 'wb') as sf:
+        shutil.copyfileobj(source_refresh.raw, sf)
+
+    # Getting the image is separate from resizing.
     dest = '%s.img' % instance
     # FIXME: error handling
     # FIXME: we can't assume the filesystem, but for now we do.
-    env = {
-        'LIBGUESTFS_HV': '/tmp/qemu-wrapper.sh',
-    }
-    subprocess.check_call(['truncate', '-r', source, dest])
+    env = {}
+        #'LIBGUESTFS_HV': '/tmp/qemu-wrapper.sh',
+    #}
+    subprocess.check_call(['truncate', '-r', source_file, dest])
     subprocess.check_call(['truncate', '-s', '%sG' % size, dest])
     subprocess.check_call(['virt-resize', '--expand', '/dev/sda1',
-                           source, dest], env=env)
+                           source_file, dest], env=env)
     return dest
 
 
@@ -212,4 +243,4 @@ if __name__ == '__main__':
         CLIENT = etcd3.client(**config['etcd'])
     else:
         CLIENT = etcd3.client()
-    main(config, sys.argv[1])
+    main(config)

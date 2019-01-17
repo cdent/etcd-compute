@@ -1,3 +1,7 @@
 etcd3
 requests
 PyYAML
+libvirt-python
+cachecontrol[filecache]
+bottle
+psutil
