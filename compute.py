@@ -1,33 +1,55 @@
 
+import io
 import json
-import shutil
+import os
 import re
+import shutil
 import subprocess
 import sys
 import time
 from threading import Event
+from urllib import parse
 import uuid
 
 import etcd3
 import requests
+import yaml
 
 KEY = '/hosts'
 SLEEP = 1
-PLACEMENT = 'http://localhost:8080'
 COMPUTE_UUID = str(uuid.uuid4())
+CLIENT = None
 
-client = etcd3.client()
+
+# default config
+CONFIG = {
+    'placement': {
+        'endpoint': 'http://localhost:8080',
+    },
+    'etcd': {},
+}
+
+
+class PrefixedSession(requests.Session):
+    def __init__(self, prefix_url=None, *args, **kwargs):
+        self.prefix_url = prefix_url
+        super(PrefixedSession, self).__init__(*args, **kwargs)
+
+    def request(self, method, url, *args, **kwargs):
+        if self.prefix_url:
+            url = parse.urljoin(self.prefix_url, url)
+        return super(PrefixedSession, self).request(method, url, *args, **kwargs)
 
 
 def _print(output):
     print('%s: %s' % (COMPUTE_UUID, output))
 
 
-def main(inventory):
+def main(config, inventory):
     """Set up the resource provider for this compute and start
     the main loop.
     """
-    session = requests.Session()
+    session = PrefixedSession(prefix_url=config['placement']['endpoint'])
     session.headers.update({'x-auth-token': 'admin',
                             'openstack-api-version': 'placement latest',
                             'accept': 'application/json',
@@ -60,7 +82,7 @@ def main_loop(compute_uuid):
         watch_event.set()
 
     our_key = '%s/%s' % (KEY, compute_uuid)
-    watch_id = client.add_watch_callback(our_key, watch_handler)
+    watch_id = CLIENT.add_watch_callback(our_key, watch_handler)
 
     while True:
         watch_event = Event()
@@ -73,7 +95,7 @@ def main_loop(compute_uuid):
             _handle_new(our_key)
         except (Exception, KeyboardInterrupt) as e:
             _print('FAIL: %s, %s' % (type(e), e))
-            client.cancel_watch(watch_id)
+            CLIENT.cancel_watch(watch_id)
             return
 
 
@@ -82,7 +104,7 @@ def _handle_new(key):
     # Clearly this is not anywhere near as much as really starting
     # an instance. And we would want to fail and unclaim (here or in
     # the scheduler?), sometimes.
-    value, meta = client.get(key)
+    value, meta = CLIENT.get(key)
     # We need to explicitly provide the decoding
     value = str(value, 'UTF-8')
     data = json.loads(value)
@@ -91,7 +113,7 @@ def _handle_new(key):
     _spawn(data)
     ip_address = _get_ip(data['instance'])
     print('\tIP is %s' % ip_address)
-    client.put('/booted/%(instance)s' % data, ip_address)
+    CLIENT.put('/booted/%(instance)s' % data, ip_address)
 
 
 def _spawn(data):
@@ -150,7 +172,7 @@ def _copy_image(source, instance, size):
 
 def _set_inventory(session, uuid, generation, inventory):
     """Set the inventory."""
-    url = '%s/resource_providers/%s/inventories' % (PLACEMENT, uuid)
+    url = '/resource_providers/%s/inventories' % uuid
     data = {
         'inventories': inventory,
         'resource_provider_generation': generation,
@@ -164,7 +186,7 @@ def _set_inventory(session, uuid, generation, inventory):
 
 def _create_resource_provider(session, uuid):
     """Create the resource provider that this compute is."""
-    url = '%s/resource_providers' % PLACEMENT
+    url = '/resource_providers'
     data = {'uuid': uuid, 'name': uuid}
     resp = session.post(url, json=data)
     if resp:
@@ -173,5 +195,21 @@ def _create_resource_provider(session, uuid):
     sys.exit(1)
 
 
+def _configure():
+    # let the possible exceptions bubble
+    if os.path.exists('compute.yaml'):
+        return yaml.safe_load(io.open('compute.yaml').read())
+    else:
+        return {}
+
+
 if __name__ == '__main__':
-    main(sys.argv[1])
+    config = {}
+    config.update(CONFIG)
+    config.update(_configure())
+    print(config)
+    if config['etcd']:
+        CLIENT = etcd3.client(**config['etcd'])
+    else:
+        CLIENT = etcd3.client()
+    main(config, sys.argv[1])

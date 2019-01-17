@@ -1,2 +1,3 @@
 etcd3
 requests
+PyYAML
