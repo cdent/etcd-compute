@@ -151,3 +151,9 @@ cleaned up. You'll want to take care of that yourself.
   somehow during that time?
 * Failure is just failure. Try again yourself, we're not going to do
   it for you.
+
+# Misc
+
+* If you are running a linux VM on an esxi hypervisor for this stuff
+  you might need to `export LIBGUESTFS_BACKEND_SETTINGS=force_tcg` to
+  get filesystem manipulation to work well.

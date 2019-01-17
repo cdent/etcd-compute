@@ -191,9 +191,10 @@ def _copy_image(source, instance, size):
     dest = '%s.img' % instance
     # FIXME: error handling
     # FIXME: we can't assume the filesystem, but for now we do.
-    env = {}
-        #'LIBGUESTFS_HV': '/tmp/qemu-wrapper.sh',
-    #}
+    env = {
+        # Needed on some esxi hosts.
+        'LIBGUESTFS_BACKEND_SETTINGS': 'force_tcg',
+    }
     subprocess.check_call(['truncate', '-r', source_file, dest])
     subprocess.check_call(['truncate', '-s', '%sG' % size, dest])
     subprocess.check_call(['virt-resize', '--expand', '/dev/sda1',
