@@ -11,7 +11,7 @@ import requests
 # got one, raw.
 PREFIX = '/hosts'
 PLACEMENT = 'http://localhost:8080'
-IMAGE = 'cirros-0.3.5-x86_64-disk.img'
+IMAGE = 'http://download.cirros-cloud.net/0.3.6/cirros-0.3.6-x86_64-disk.img'
 
 client = etcd3.client()
 
