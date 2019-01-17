@@ -20,7 +20,9 @@ and come to grips with some of the systems and process involved in
 creating virtual machines.
 
 It assumes you've got a working libvirt install, with `virt-install` and
-`virt-resize`.
+`virt-resize`. On ubuntu that means the `virtinst` and `libguestfs-tools`
+packages. **Note**: if this ever gets to be slightly more than a toy using
+those command line tools should be changed to in-Python code.
 
 # Architecture
 
@@ -33,8 +35,9 @@ A placement service runs, also in a container, talking to a
 database.
 
 One or more `compute.py` processes start up and register themselves
-as resource providers with some inventory and then watch for new
-data at keys associated with themselves within `etcd`.
+as resource providers with some inventory (calculated via the python
+`psutil` package) and then watch for new data at keys associated
+with themselves within `etcd`.
 
 `schedule.py` accepts an input of resource requirements, requests
 allocation candidates from placement, attempts to claim the first
@@ -47,7 +50,9 @@ are left out of the picture for now.
 copy of the image, launches a VM using `virt-install`, and sets a
 key back on `etcd` saying so, and recording the IP of the guest.
 
-A simple metadata server runs to keep booting of cloud images fast.
+A simple metadata server runs to keep booting of cloud images fast,
+and if the image supports it, let cloud-init do things like set an
+authorized ssh key.
 
 # Trying It
 
@@ -64,22 +69,39 @@ Edit `mdserver.conf` as required and start the metadata server with
 
 ```
 sudo ip addr add 169.254.169.254 dev virbr0
-python md_server/mdserver/server.py mdserver.conf &
+sudo python md_server/mdserver/server.py mdserver.conf &
 ```
+
+Configured `compute.py` by creating a `compute.yaml` in the same
+directory, looking something like this:
+
+```yaml
+etcd:
+  host: ds1
+placement:
+  endpoint: http://ds1:8080
+```
+
+If you do not create the file, defaults will be used, pointing to
+localhost.
 
 Start one or more `compute.py`. The argument describes the
 inventory. Here we start ten of them in the background:
 
 ```
 for i in {1..10}; do \
-    python compute.py 'VCPU:4,DISK_GB:10,MEMORY_MB:512' &> compute.$i.log & \
+    python compute.py &> compute.$i.log & \
     sleep 2; done
 ```
 
-At some point `compute.py` will inspect the system for a real
-inventory.
+Because `compute.py` inspects the system for a real inventory, you
+end up multiple-booking inventory if you run all the computes on the
+same host, but it is possible to do for testing. It is also possible
+to run `compute.py` on multiple hosts, but they must all be
+configured to talk to placement and etcd where they are is running.
 
-Then we can try to schedule a workload:
+Then we can try to schedule a workload. Currently `schedule.py` must
+run on the same host as placement and etcd, but that can be fixed.
 
 ```
 python schedule.py 'resources=VCPU:1,DISK_GB:1,MEMORY_MB:5'
@@ -123,10 +145,8 @@ cleaned up. You'll want to take care of that yourself.
 
 # Things to Clean Up
 
-* Image URLs should be passed on the schedule.py command line and
-  the compute.py should create the VMs image by pulling it and
-  writing to an appropriate name. With
-  [caching](https://cachecontrol.readthedocs.io/).
+* Images are being downloaded now, but the use of cache-conrol
+  is broken, it always things the format of the cache is bad.
 * Need some way to destroy an image, including cleaning up
   allocations. Presumably `schedule.py` can write to the appropriate
   key in `etcd` and a compute will see it and do the right thing.
