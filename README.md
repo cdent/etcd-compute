@@ -74,7 +74,7 @@ sudo ip addr add 169.254.169.254 dev virbr0
 sudo python md_server/mdserver/server.py mdserver.conf &
 ```
 
-Configured `compute.py` by creating a `compute.yaml` in the same
+Configure `compute.py` by creating a `compute.yaml` in the same
 directory, looking something like this:
 
 ```yaml
@@ -98,12 +98,13 @@ for i in {1..10}; do \
 
 Because `compute.py` inspects the system for a real inventory, you
 end up multiple-booking inventory if you run all the computes on the
-same host, but it is possible to do for testing. It is also possible
+same host, but it is possible to do so for testing. It is also possible
 to run `compute.py` on multiple hosts, but they must all be
 configured to talk to placement and etcd where they are is running.
 
-Then we can try to schedule a workload. Currently `schedule.py` must
-run on the same host as placement and etcd, but that can be fixed.
+Once `compute.py` is running, we can try to schedule a workload.
+`schedule.py` can run from any host that has network access to the
+placement and etcd servers. Modify `schedule.yaml` as required.
 
 ```
 python schedule.py 'resources=VCPU:1,DISK_GB:1,MEMORY_MB:5'
@@ -142,16 +143,24 @@ query by giving the instance uuid to schedule.py:
 python schedule.py d578fb7c-7787-4e73-b69a-a7b3ef9bf73a
 ```
 
+The IP is (for now) only accessible from the host.
+
+You can destroy an instance by:
+
+```
+python schedule.py destroy d578fb7c-7787-4e73-b69a-a7b3ef9bf73a
+```
+
+This will destroy and undefine it on the host, and clear the allocations in
+placement.
+
 **Note**: The database and etcd data (in `/data/etcd`) are not
 cleaned up. You'll want to take care of that yourself.
 
 # Things to Clean Up
 
 * Images are being downloaded now, but the use of cache-conrol
-  is broken, it always things the format of the cache is bad.
-* Need some way to destroy an image, including cleaning up
-  allocations. Presumably `schedule.py` can write to the appropriate
-  key in `etcd` and a compute will see it and do the right thing.
+  is broken, it always thinks the format of the cache is bad.
 * On startup a compute should check to see if the metadata server is
   there, and if not, fork and start one.
 * Resizing disk images is currently done with multiple subprocess calls,
@@ -170,7 +179,7 @@ cleaned up. You'll want to take care of that yourself.
 * Concurrency in the computes isn't a huge concern, is better to
   spread than pack (in this environment) anyway. If there are
   time consuming operations in a compute, do we want to lock it
-  somehow during that time?
+  somehow during that time? Or perhaps fork?
 * Failure is just failure. Try again yourself, we're not going to do
   it for you.
 
@@ -179,3 +188,14 @@ cleaned up. You'll want to take care of that yourself.
 * If you are running a linux VM on an esxi hypervisor for this stuff
   you might need to `export LIBGUESTFS_BACKEND_SETTINGS=force_tcg` to
   get filesystem manipulation to work well.
+
+# Help Wanted
+
+If you think this is interesting, and would like to help out, please
+feel to make a pull request. There are a few main areas that need
+attention:
+
+* Making networking more useful.
+* Error handling.
+* Dealing with concurrency and race conditions in `compute.py`.
+* Interacting with libvirt and avoiding subprocess calls.
