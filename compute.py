@@ -14,6 +14,7 @@ import uuid
 import cachecontrol
 from cachecontrol.caches import file_cache
 import etcd3
+import libvirt
 import psutil
 import requests
 import yaml
@@ -73,7 +74,7 @@ def main(config):
     generation = _create_resource_provider(session, COMPUTE_UUID)
     _set_inventory(session, COMPUTE_UUID, generation, inventories_dict)
 
-    main_loop(COMPUTE_UUID)
+    main_loop(session, COMPUTE_UUID)
 
 
 def _calculate_inventory():
@@ -90,10 +91,10 @@ def _calculate_inventory():
     }
 
 
-def main_loop(compute_uuid):
+def main_loop(session, compute_uuid):
     """Listen for changes on the key for this instance."""
 
-    # This is won't cope well if lots of requests happen on the
+    # This won't cope well if lots of requests happen on the same
     # key at near the same time, I expect etcd can help here, but
     # further research required.
 
@@ -111,7 +112,7 @@ def main_loop(compute_uuid):
             while not watch_event.is_set():
                 time.sleep(SLEEP)
                 _print('sleeping')
-            _handle_new(our_key)
+            _handle_new(session, our_key)
         except (Exception, KeyboardInterrupt) as e:
             _print('FAIL: %s, %s' % (type(e), e))
             sys.excepthook(*sys.exc_info())
@@ -119,7 +120,7 @@ def main_loop(compute_uuid):
             return
 
 
-def _handle_new(key):
+def _handle_new(session, key):
     """Note the spawn, by sending True to /booted."""
     # Clearly this is not anywhere near as much as really starting
     # an instance. And we would want to fail and unclaim (here or in
@@ -128,12 +129,24 @@ def _handle_new(key):
     # We need to explicitly provide the decoding
     value = str(value, 'UTF-8')
     data = json.loads(value)
-    _print('INSTANTIATE INSTANCE %(instance)s WITH IMAGE %(image)s' % data)
+    _print('MANAGE INSTANCE %(instance)s WITH IMAGE %(image)s' % data)
     _print('\tALLOCATIONS ARE %(allocations)s' % data)
-    _spawn(data)
-    ip_address = _get_ip(data['instance'])
-    print('\tIP is %s' % ip_address)
-    CLIENT.put('/booted/%(instance)s' % data, ip_address)
+    if data['allocations']:
+        _spawn(data)
+        ip_address = _get_ip(data['instance'])
+        print('\tIP is %s' % ip_address)
+        CLIENT.put('/booted/%(instance)s' % data, ip_address)
+    else:
+        instance = data['instance']
+        _destroy(instance)
+        del data['instance']
+        del data['image']
+        resp = session.put('/allocations/%s' % instance, json=data)
+        if resp:
+            CLIENT.delete('/booted/%s' % instance)
+            print('\tDESTROYED %s' % instance)
+        else:
+            print('\tINCOMPLETE DESTROY %s: %s' % (instance, resp))
 
 
 def _spawn(data):
@@ -159,6 +172,14 @@ def _spawn(data):
     _print('spawning %s' % args)
     subprocess.Popen(args)
     _print('spawned %s' % args)
+
+
+def _destroy(instance):
+    conn = libvirt.open('qemu:///system')
+    dom = conn.lookupByName(instance)
+    if dom:
+        dom.destroy()
+        dom.undefine()
 
 
 def _get_ip(instance):
