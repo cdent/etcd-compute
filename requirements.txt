@@ -1,7 +1,7 @@
 etcd3
 requests
 PyYAML
-libvirt-python
+libvirt-python; sys_platform != 'darwin'
 cachecontrol[filecache]
 bottle
 psutil

@@ -1,0 +1,4 @@
+etcd:
+  host: ds1
+placement:
+  endpoint: http://ds1:8080
