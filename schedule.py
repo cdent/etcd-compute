@@ -55,6 +55,21 @@ def schedule(session, resources):
         sys.exit(1)
 
 
+def destroy(session, instance):
+    """Send a message with empty allocations over etcd."""
+    resp = session.get('/allocations/%s' % instance)
+    if resp:
+        current_allocations = resp.json()
+        # In this system we only have one resource provider in the allocations.
+        target = list(current_allocations['allocations'].keys())[0]
+        current_allocations['allocations'] = {}
+        current_allocations['instance'] = instance
+        current_allocations['image'] = None
+        CLIENT.put('%s/%s' % (PREFIX, target), json.dumps(current_allocations))
+    else:
+        print('FAILED to find allocations for %s' % instance)
+
+
 def query(instance):
     """Get info about an instance from etcd."""
     info, meta = CLIENT.get('/booted/%s' % instance)
@@ -62,15 +77,23 @@ def query(instance):
     sys.exit(0)
 
 
-def main(config, resources):
+def main(config, args):
     """Establish session and call schedule."""
-    if 'resources' in resources:
-        session = PrefixedSession(prefix_url=config['placement']['endpoint'])
-        session.headers.update({'x-auth-token': 'admin',
-                                'openstack-api-version': 'placement latest',
-                                'accept': 'application/json',
-                                'content-type': 'application/json'})
-        schedule(session, resources)
+    # FIXME: do some real arg process
+    session = PrefixedSession(prefix_url=config['placement']['endpoint'])
+    session.headers.update({'x-auth-token': 'admin',
+                            'openstack-api-version': 'placement latest',
+                            'accept': 'application/json',
+                            'content-type': 'application/json'})
+    if len(args) == 2:
+        command, instance = args
+        if command == 'destroy':
+            destroy(session, instance)
+        else:
+            print('Unknown command')
+            sys.exit(1)
+    elif 'resources' in args[0]:
+        schedule(session, args[0])
     else:
         query(resources)
 
@@ -141,4 +164,4 @@ if __name__ == '__main__':
         CLIENT = etcd3.client(**config['etcd'])
     else:
         CLIENT = etcd3.client()
-    main(config, sys.argv[1])
+    main(config, sys.argv[1:])
