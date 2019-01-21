@@ -54,6 +54,10 @@ CONFIG = {
         'endpoint': 'http://localhost:8080',
     },
     'etcd': {},
+    # Do we resize disk images. Set to False when
+    # doing testing and experimenting or because that's
+    # just what you want. Means allocations are not accurate.
+    'resize': True,
 }
 
 
@@ -84,7 +88,7 @@ def main(config):
     generation = _create_resource_provider(session, COMPUTE_UUID)
     _set_inventory(session, COMPUTE_UUID, generation, inventories_dict)
 
-    main_loop(session, COMPUTE_UUID)
+    main_loop(config, session, COMPUTE_UUID)
 
 
 def _calculate_inventory():
@@ -101,7 +105,7 @@ def _calculate_inventory():
     }
 
 
-def main_loop(session, compute_uuid):
+def main_loop(config, session, compute_uuid):
     """Listen for changes on the key for this instance."""
 
     # This won't cope well if lots of requests happen on the same
@@ -122,7 +126,7 @@ def main_loop(session, compute_uuid):
             while not watch_event.is_set():
                 time.sleep(SLEEP)
                 _print('sleeping')
-            _handle_new(session, our_key)
+            _handle_new(config, session, our_key)
         except (Exception, KeyboardInterrupt) as e:
             _print('FAIL: %s, %s' % (type(e), e))
             sys.excepthook(*sys.exc_info())
@@ -130,7 +134,7 @@ def main_loop(session, compute_uuid):
             return
 
 
-def _handle_new(session, key):
+def _handle_new(config, session, key):
     """Note the spawn, by sending True to /booted."""
     # Clearly this is not anywhere near as much as really starting
     # an instance. And we would want to fail and unclaim (here or in
@@ -142,7 +146,7 @@ def _handle_new(session, key):
     _print('MANAGE INSTANCE %(instance)s WITH IMAGE %(image)s' % data)
     _print('\tALLOCATIONS ARE %(allocations)s' % data)
     if data['allocations']:
-        _spawn(data)
+        _spawn(config, data)
         ip_address = _get_ip(data['instance'])
         print('\tIP is %s' % ip_address)
         CLIENT.put('/booted/%(instance)s' % data, ip_address)
@@ -159,7 +163,7 @@ def _handle_new(session, key):
             print('\tINCOMPLETE DESTROY %s: %s' % (instance, resp))
 
 
-def _spawn(data):
+def _spawn(config, data):
     image = data['image']
     instance = data['instance']
     allocations = data['allocations'][COMPUTE_UUID]['resources']
@@ -167,7 +171,7 @@ def _spawn(data):
     memory = allocations['MEMORY_MB']
     vcpu = allocations['VCPU']
     disk_size = allocations['DISK_GB']
-    dest = _copy_image(image, instance, disk_size)
+    dest = _copy_image(config, image, instance, disk_size)
     _print(dest)
     args = [
             'virt-install',
@@ -207,7 +211,7 @@ def _get_ip(instance):
         time.sleep(1)
 
 
-def _copy_image(source, instance, size):
+def _copy_image(config, source, instance, size):
     # source is expected to be a url
     source_file = source.rsplit('/', 1)[1]
     try:
@@ -227,10 +231,18 @@ def _copy_image(source, instance, size):
         # Needed on some esxi hosts.
         'LIBGUESTFS_BACKEND_SETTINGS': 'force_tcg',
     }
-    subprocess.check_call(['truncate', '-r', source_file, dest])
-    subprocess.check_call(['truncate', '-s', '%sG' % size, dest])
-    subprocess.check_call(['virt-resize', '--expand', '/dev/sda1',
-                           source_file, dest], env=env)
+    if config['resize']:
+        subprocess.check_call(['truncate', '-r', source_file, dest])
+        subprocess.check_call(['truncate', '-s', '%sG' % size, dest])
+        subprocess.check_call(['virt-resize', '--expand', '/dev/sda1',
+                               source_file, dest], env=env)
+    else:
+        # FIXME: this makes too many assumptions about image format
+        #subprocess.check_call(['qemu-img', 'create', '-f', 'qcow2',
+        #                       '-b', source_file,
+        #                       dest])
+        # And this is space wasteful.
+        shutil.copyfile(source_file, dest)
     return dest
 
 

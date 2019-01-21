@@ -2,3 +2,7 @@ etcd:
   host: ds1
 placement:
   endpoint: http://ds1:8080
+# Don't resize disk images, this means that
+# the reported allocations will be incorrect
+# but booting will be faster.
+resize: False
