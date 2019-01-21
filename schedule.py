@@ -4,12 +4,12 @@ import io
 import json
 import os
 import sys
-from urllib import parse
 import uuid
 
 import etcd3
-import requests
 import yaml
+
+from ecomp import clients
 
 # Replace with service catalog, but since right now we haven't
 # got one, raw.
@@ -25,18 +25,6 @@ CONFIG = {
     },
     'etcd': {},
 }
-
-
-# FIXME: duped from compute.py
-class PrefixedSession(requests.Session):
-    def __init__(self, prefix_url=None, *args, **kwargs):
-        self.prefix_url = prefix_url
-        super(PrefixedSession, self).__init__(*args, **kwargs)
-
-    def request(self, method, url, *args, **kwargs):
-        if self.prefix_url:
-            url = parse.urljoin(self.prefix_url, url)
-        return super(PrefixedSession, self).request(method, url, *args, **kwargs)
 
 
 def schedule(session, resources):
@@ -80,7 +68,7 @@ def query(instance):
 def main(config, args):
     """Establish session and call schedule."""
     # FIXME: do some real arg process
-    session = PrefixedSession(prefix_url=config['placement']['endpoint'])
+    session = clients.PrefixedSession(prefix_url=config['placement']['endpoint'])
     session.headers.update({'x-auth-token': 'admin',
                             'openstack-api-version': 'placement latest',
                             'accept': 'application/json',
