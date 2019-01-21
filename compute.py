@@ -19,6 +19,9 @@ import psutil
 import requests
 import yaml
 
+from ecomp import clients
+from ecomp import conf
+
 KEY = '/hosts'
 SLEEP = 1
 COMPUTE_UUID = str(uuid.uuid4())
@@ -36,26 +39,15 @@ CONFIG = {
 }
 
 
-class PrefixedSession(requests.Session):
-    def __init__(self, prefix_url=None, *args, **kwargs):
-        self.prefix_url = prefix_url
-        super(PrefixedSession, self).__init__(*args, **kwargs)
-
-    def request(self, method, url, *args, **kwargs):
-        if self.prefix_url:
-            url = parse.urljoin(self.prefix_url, url)
-        return super(PrefixedSession, self).request(method, url, *args, **kwargs)
-
-
 def _print(output):
-    print('%s: %s' % (COMPUTE_UUID, output))
+    print('%s: [%s] %s' % (time.time(), COMPUTE_UUID, output))
 
 
 def main(config):
     """Set up the resource provider for this compute and start
     the main loop.
     """
-    session = PrefixedSession(prefix_url=config['placement']['endpoint'])
+    session = clients.PrefixedSession(prefix_url=config['placement']['endpoint'])
     session.headers.update({'x-auth-token': 'admin',
                             'openstack-api-version': 'placement latest',
                             'accept': 'application/json',
@@ -257,9 +249,7 @@ def _configure():
 
 
 if __name__ == '__main__':
-    config = {}
-    config.update(CONFIG)
-    config.update(_configure())
+    config = conf.configure(CONFIG, 'compute.yaml')
     print(config)
     if config['etcd']:
         CLIENT = etcd3.client(**config['etcd'])
