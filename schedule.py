@@ -1,14 +1,12 @@
 
 import copy
-import io
 import json
-import os
 import sys
 import uuid
 
 import etcd3
-import yaml
 
+from ecomp import conf
 from ecomp import clients
 
 # Replace with service catalog, but since right now we haven't
@@ -134,19 +132,8 @@ def _schedule(session, data):
     return False
 
 
-# FIXME: duped with compute.py
-def _configure():
-    # let the possible exceptions bubble
-    if os.path.exists('schedule.yaml'):
-        return yaml.safe_load(io.open('schedule.yaml').read())
-    else:
-        return {}
-
-
 if __name__ == '__main__':
-    config = {}
-    config.update(CONFIG)
-    config.update(_configure())
+    config = conf.configure(CONFIG, 'schedule.yaml')
     print(config)
     if config['etcd']:
         CLIENT = etcd3.client(**config['etcd'])
