@@ -13,8 +13,10 @@ import uuid
 
 import cachecontrol
 from cachecontrol.caches import file_cache
+from cachecontrol import serialize
 import etcd3
 import libvirt
+import msgpack
 import psutil
 import requests
 import yaml
@@ -22,12 +24,28 @@ import yaml
 from ecomp import clients
 from ecomp import conf
 
+
+# deal with size limitations in CacheControl
+class MySerializer(serialize.Serializer):
+
+    def _loads_v4(self, request, data):
+        try:
+            cached = msgpack.loads(
+                data, encoding="utf-8", max_bin_len=2147483647)
+        except ValueError:
+            return
+
+        return self.prepare_response(request, cached)
+
+
 KEY = '/hosts'
 SLEEP = 1
 COMPUTE_UUID = str(uuid.uuid4())
 CLIENT = None
 CACHED_SESSION = cachecontrol.CacheControl(
-    requests.Session(), cache=file_cache.FileCache('.web_cache'))
+    requests.Session(),
+    cache=file_cache.FileCache('.web_cache'),
+    serializer=MySerializer())
 
 
 # default config
@@ -196,6 +214,7 @@ def _copy_image(source, instance, size):
         os.unlink(source_file)
     except FileNotFoundError:
         pass
+    _print('Fetching image from %s' % source)
     source_refresh = CACHED_SESSION.get(source, stream=True)
     with open(source_file, 'wb') as sf:
         shutil.copyfileobj(source_refresh.raw, sf)
