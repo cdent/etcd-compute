@@ -1,5 +1,6 @@
 
 import io
+import functools
 import json
 import os
 import multiprocessing
@@ -26,8 +27,12 @@ import yaml
 from ecomp import clients
 from ecomp import conf
 
-# Ignore SIGCHLD to see if we can avoid needing to reap.
-signal.signal(signal.SIGCHLD, signal.SIG_IGN)
+
+# Have a tidy exit on signt
+def _exit(*args):
+    sys.exit(args[0])
+signal.signal(signal.SIGINT, _exit)
+
 
 # Locked shared around the children.
 LOCK = multiprocessing.Lock()
@@ -91,7 +96,7 @@ def main(config):
     generation = _create_resource_provider(session, COMPUTE_UUID)
     _set_inventory(session, COMPUTE_UUID, generation, inventories_dict)
 
-    main_loop(config, session, COMPUTE_UUID)
+    main_loop(config, COMPUTE_UUID)
 
 
 def _calculate_inventory():
@@ -108,68 +113,66 @@ def _calculate_inventory():
     }
 
 
-def main_loop(config, session, compute_uuid):
+def handle_build(instance, response):
+    if response is False:
+        _print('updating etcd for dead instance: %s' % instance)
+        CLIENT.delete('/booted/%s' % instance)
+    else:
+        _print('updating etcd for instance %s with ip %s' % (instance, response))
+        CLIENT.put('/booted/%s' % instance, response)
+
+
+def handle_error(exc):
+    _print('child saw %s' % exc)
+
+
+def main_loop(config, compute_uuid):
     """Listen for changes on the key for this host."""
-    global CLIENT
 
     our_key = '%s/%s/' % (KEY, compute_uuid)
     events_iterator, cancel = CLIENT.watch_prefix(our_key)
 
-    while True:
-        try:
-            for event in events_iterator:
-                p = multiprocessing.Process(target=_handle_new, args=(config, session, event.value, cancel))
-                p.start()
-        except etcd3.exceptions.Etcd3Exception as exc:
-            _print('\tRETRY main loop: %s' % exc)
-            CLIENT = etcd3.client(**config['etcd'])
-            events_iterator, cancel = CLIENT.watch_prefix(our_key)
+    cpu_count = multiprocessing.cpu_count() // 2
+    with multiprocessing.Pool(processes=cpu_count) as pool:
+        for event in events_iterator:
+            value = str(event.value, 'UTF-8')
+            data = json.loads(value)
+            instance = data['instance']
+            success = functools.partial(handle_build, instance)
+            error = handle_error
+
+            _print('PREPPING ASYNC for %s' % instance)
+            args = (config, data)
+            pool.apply_async(_handle_new, args, {}, success, error)
+    # Shouldn't reach here.
+    sys.exit(0)
 
 
-def _handle_new(config, session, instance_data, cancel):
+def _handle_new(config, data):
     """Note the spawn, by sending the ip address to /booted."""
-    global CLIENT
     # And we would want to fail and unclaim (here or in
     # the scheduler?), sometimes.
-    # maybe shutdown the etcd3 watcher in the subprocess?
-    cancel()
-    value = str(instance_data, 'UTF-8')
-    data = json.loads(value)
     _print('MANAGE INSTANCE %(instance)s WITH IMAGE %(image)s' % data)
     _print('\tALLOCATIONS ARE %(allocations)s' % data)
     if data['allocations']:
         _spawn(config, data)
         ip_address = _get_ip(data['instance'])
         _print('\tIP is %s' % ip_address)
-        while True:
-            try: 
-                #etcd3.client(**config['etcd']).put('/booted/%(instance)s' % data, ip_address)
-                CLIENT.put('/booted/%(instance)s' % data, ip_address)
-                break
-            except etcd3.exceptions.Etcd3Exception as exc:
-                _print('\tRETRY update ip: %s' % exc)
-                time.sleep(1)
-                CLIENT = etcd3.client(**config['etcd'])
-        sys.exit(0)
+        return ip_address
     elif 'allocations' in data:
         instance = data['instance']
         _destroy(instance)
         del data['instance']
         del data['image']
+        # FIXME dupe
+        session = clients.PrefixedSession(prefix_url=config['placement']['endpoint'])
+        session.headers.update({'x-auth-token': 'admin',
+                                'openstack-api-version': 'placement latest',
+                                'accept': 'application/json',
+                                'content-type': 'application/json'})
         resp = session.put('/allocations/%s' % instance, json=data)
         if resp:
-            # new connection to etcd
-            while True:
-                try:
-                    #etcd3.client(**config['etcd']).delete('/booted/%s' % instance)
-                    CLIENT.delete('/booted/%s' % instance)
-                    break
-                except etcd3.exceptions.Etcd3Exception as exc:
-                    _print('\tRETRY clear instance: %s' % exc)
-                    time.sleep(1)
-                    CLIENT = etcd3.client(**config['etcd'])
-            _print('\tDESTROYED %s' % instance)
-            sys.exit(0)
+            return False
         else:
             _print('\tINCOMPLETE DESTROY %s: %s' % (instance, resp))
             sys.exit(1)
@@ -309,7 +312,7 @@ def _configure():
 
 if __name__ == '__main__':
     config = conf.configure(CONFIG, 'compute.yaml')
-    print(config)
+    _print(config)
     if config['etcd']:
         CLIENT = etcd3.client(**config['etcd'])
     else:
