@@ -51,7 +51,7 @@ def destroy(session, instance):
         current_allocations['allocations'] = {}
         current_allocations['instance'] = instance
         current_allocations['image'] = None
-        CLIENT.put('%s/%s' % (PREFIX, target), json.dumps(current_allocations))
+        CLIENT.put('%s/%s/%s' % (PREFIX, target, instance), json.dumps(current_allocations))
     else:
         print('FAILED to find allocations for %s' % instance)
 
@@ -81,7 +81,7 @@ def main(config, args):
     elif 'resources' in args[0]:
         schedule(session, args[0])
     else:
-        query(resources)
+        query(args[0])
 
 
 def _schedule(session, data):
@@ -118,7 +118,7 @@ def _schedule(session, data):
             message = copy.deepcopy(claim)
             message['instance'] = consumer
             message['image'] = image
-            CLIENT.put('%s/%s' % (PREFIX, target), json.dumps(message))
+            CLIENT.put('%s/%s/%s' % (PREFIX, target, consumer), json.dumps(message))
             break
         else:
             print('CLAIM FAIL: %s' % resp.json())
