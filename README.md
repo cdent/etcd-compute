@@ -39,7 +39,12 @@ database.
 One or more `compute.py` processes start up and register themselves
 as resource providers with some inventory (calculated via the python
 `psutil` package) and then watch for new data at keys associated
-with themselves within `etcd`.
+with themselves within `etcd`. A pool of workers is also started.
+These are responsible for creating or destroying VMs while the main
+process is responsible for interacting with `etcd`. This makes it
+possible to concurrently launch multiple VMs. More importantly it
+means that concurent requests to launch are not lost (this was
+true in earlier versions).
 
 `schedule.py` accepts an input of resource requirements, requests
 allocation candidates from placement, attempts to claim the first
@@ -87,20 +92,30 @@ placement:
 If you do not create the file, defaults will be used, pointing to
 localhost.
 
-Start one or more `compute.py`. The argument describes the
-inventory. Here we start ten of them in the background:
+If you do not want to resize disk images (it saves time but makes
+the reporting of disk usage inaccurate) add the following to
+`compute.yaml`
+
+```yaml
+resize: False
+```
+
+Start a `compute.py` on one or more hosts. Each host must have
+the python requirements, the `virt-install` related tools, and
+a `compute.yaml` pointing to placement and etcd.
 
 ```
-for i in {1..10}; do \
-    python compute.py &> compute.$i.log & \
-    sleep 2; done
+python compute.py
 ```
 
 Because `compute.py` inspects the system for a real inventory, you
-end up multiple-booking inventory if you run all the computes on the
-same host, but it is possible to do so for testing. It is also possible
-to run `compute.py` on multiple hosts, but they must all be
-configured to talk to placement and etcd where they are is running.
+end up multiple-booking inventory if you have more than one
+`compute.py` on same host, but it is possible to do so for testing.
+
+Each time a `compute.py` is started a new resource provider is
+created. This means that there can be orphaned providers in
+placement that will be scheduled to, but don't have any listeners.
+Work around this by `delete from resource_providers;` as required.
 
 Once `compute.py` is running, we can try to schedule a workload.
 `schedule.py` can run from any host that has network access to the
@@ -152,42 +167,40 @@ python schedule.py destroy d578fb7c-7787-4e73-b69a-a7b3ef9bf73a
 ```
 
 This will destroy and undefine it on the host, and clear the allocations in
-placement.
+placement. You can also use `virsh` to destroy VMs, but this will
+not clean up allocations.
 
 **Note**: The database and etcd data (in `/data/etcd`) are not
 cleaned up. You'll want to take care of that yourself.
 
 # Things to Clean Up
 
-* Images are being downloaded now, but the use of cache-conrol
-  is broken, it always thinks the format of the cache is bad.
 * On startup a compute should check to see if the metadata server is
   there, and if not, fork and start one.
 * Resizing disk images is currently done with multiple subprocess calls,
   this is cumbersome and weird.
-* Can the experiment be made more robust/interesting by, when using
-  more than one `compute.py` on the same physical host, reporting
-  disk as a shared resource provider? Or would that be complicating
-  things too much?
-* Switch all these subprocess calls to using the python libvirt
+* Switch all the subprocess calls to using the python libvirt
   package directly.
+* After a VM is destroyed the image is left lying around. That
+  should be removed.
+* Asking to destroy a VM while it is being built has not been
+  testing and is likely to go poorly.
+* When a compute.py shuts down, its resource provider should be
+  disabled, removed, what?
 
 # Concepts
 
 * Configuration should be limited, because that's hassle.
 * Features should be limited, because that's hassle.
-* Concurrency in the computes isn't a huge concern, is better to
-  spread than pack (in this environment) anyway. If there are
-  time consuming operations in a compute, do we want to lock it
-  somehow during that time? Or perhaps fork?
 * Failure is just failure. Try again yourself, we're not going to do
   it for you.
 
 # Misc
 
-* If you are running a linux VM on an esxi hypervisor for this stuff
-  you might need to `export LIBGUESTFS_BACKEND_SETTINGS=force_tcg` to
-  get filesystem manipulation to work well.
+* If you are running a linux VM on an esxi hypervisor as a host for
+  this stuff you might need to
+  `export LIBGUESTFS_BACKEND_SETTINGS=force_tcg` to get filesystem
+  manipulation to work well.
 
 # Help Wanted
 
@@ -197,5 +210,4 @@ attention:
 
 * Making networking more useful.
 * Error handling.
-* Dealing with concurrency and race conditions in `compute.py`.
 * Interacting with libvirt and avoiding subprocess calls.
