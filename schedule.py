@@ -59,8 +59,12 @@ def destroy(session, instance):
 def query(instance):
     """Get info about an instance from etcd."""
     info, meta = CLIENT.get('/booted/%s' % instance)
-    print(info.decode('utf-8'))
-    sys.exit(0)
+    if info:
+        print(info.decode('utf-8'))
+        sys.exit(0)
+    else:
+        print('Instance %s acquired no IP' % instance)
+        sys.exit(1)
 
 
 def main(config, args):
