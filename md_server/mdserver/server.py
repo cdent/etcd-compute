@@ -11,20 +11,6 @@ LOG.setLevel(logging.INFO)
 LOG.addHandler(logging.StreamHandler())
 
 
-USERDATA_TEMPLATE = """\
-#cloud-config
-hostname: {{hostname}}
-local-hostname: {{hostname}}
-fqdn: {{hostname}}.localdomain
-manage_etc_hosts: true
-password: {{mdserver_password}}
-chpasswd: { expire: False }
-ssh_pwauth: True
-ssh_authorized_keys:
-    - {{public_key_default}}
-"""
-
-
 class MetadataHandler(object):
 
     def _get_mgmt_mac(self):
@@ -52,11 +38,11 @@ class MetadataHandler(object):
 
     def gen_userdata(self):
         config = bottle.request.app.config
-        config['public_key_default'] = config['public-keys.default']
-        config['mdserver_password'] = config['mdserver.password']
-        config['hostname'] = self.gen_hostname().strip('\n')
-        user_data = template(USERDATA_TEMPLATE, **config)
-        return self.make_content(user_data)
+        user_data_file = config['user-data.default']
+        if user_data_file:
+            with open(user_data_file) as user_data:
+                return self.make_content(user_data.read())
+        return self.make_content('')
 
     def gen_hostname_old(self):
         client_host = bottle.request.get('REMOTE_ADDR')
