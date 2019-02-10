@@ -160,7 +160,7 @@ python schedule.py d578fb7c-7787-4e73-b69a-a7b3ef9bf73a
 
 By default the guest IP is only accessible from the host. If you define
 a bridge interface in `compute.yaml` this can be worked around. See
-[BRIDGE.md](BRIDGE.MD) for more.
+[BRIDGE.md](BRIDGE.md) for more.
 
 You can destroy an instance by:
 
@@ -186,7 +186,7 @@ cleaned up. You'll want to take care of that yourself.
 * After a VM is destroyed the image is left lying around. That
   should be removed.
 * Asking to destroy a VM while it is being built has not been
-  testing and is likely to go poorly.
+  tested and is likely to go poorly.
 * When a compute.py shuts down, its resource provider should be
   disabled, removed, what?
 
