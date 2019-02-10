@@ -158,7 +158,9 @@ query by giving the instance uuid to schedule.py:
 python schedule.py d578fb7c-7787-4e73-b69a-a7b3ef9bf73a
 ```
 
-The IP is (for now) only accessible from the host.
+By default the guest IP is only accessible from the host. If you define
+a bridge interface in `compute.yaml` this can be worked around. See
+[BRIDGE.md](BRIDGE.MD) for more.
 
 You can destroy an instance by:
 

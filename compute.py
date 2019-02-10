@@ -66,6 +66,10 @@ CONFIG = {
     # doing testing and experimenting or because that's
     # just what you want. Means allocations are not accurate.
     'resize': True,
+    # By default we only use the 'default' libvirt network.
+    # If bridge is defined that will be used too.
+    'bridge': None,
+
 }
 
 
@@ -200,7 +204,11 @@ def _spawn(config, data):
             '--graphics', 'none',
             '--import',
             '--noautoconsole',
+            '--network', 'network:default',
             ]
+    bridge = config['bridge']
+    if bridge:
+        args.extend(['--network', 'bridge:%s' % bridge])
     _print('spawning %s' % args)
     subprocess.Popen(args)
     _print('spawned %s' % args)

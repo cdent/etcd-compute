@@ -6,3 +6,8 @@ placement:
 # the reported allocations will be incorrect
 # but booting will be faster.
 resize: False
+# If a bridge is defined, pointing to a real interface on the host
+# a second interface will be created in the VM, using the bridge.
+# See BRIDGE.md for more information on how to make sure this
+# interface is useful.
+bridge: br0
