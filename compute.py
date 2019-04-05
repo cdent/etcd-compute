@@ -106,12 +106,27 @@ def main(config):
             # For now use defaults for the rest of the fields
         }
 
-    generation = _create_resource_provider(session, compute_uuid)
-    _set_inventory(session, compute_uuid, generation, inventories_dict)
+    if not confirm_resource_provider(session, compute_uuid, inventories_dict):
+        generation = _create_resource_provider(session, compute_uuid)
+        _set_inventory(session, compute_uuid, generation, inventories_dict)
+
     LOCK_INVENTORY = _create_lock_inventory(
         session, compute_uuid, inventories_dict)
 
     main_loop(config, compute_uuid)
+
+
+def confirm_resource_provider(session, rp_uuid, inventories):
+    """Check for resource provider and reset inventory."""
+    url = '/resource_providers/%s' % rp_uuid
+    data = {'uuid': rp_uuid, 'name': rp_uuid}
+    resp = session.get(url)
+    if resp:
+        generation = resp.json()['generation']
+        _print('Existing resource provider with gen %s found.' % generation)
+        _set_inventory(session, rp_uuid, generation, inventories)
+        return True
+    return False
 
 
 def _create_lock_inventory(session, rp_uuid, inventories):
