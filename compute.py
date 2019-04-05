@@ -29,7 +29,12 @@ from ecomp import conf
 
 
 # Have a tidy exit on signt
+LOCK_INVENTORY = lambda: sys.exit(1)
 def _exit(*args):
+    global LOCK_INVENTORY
+    # Only lock once, from the parent.
+    if multiprocessing.active_children():
+        LOCK_INVENTORY()
     sys.exit(args[0])
 signal.signal(signal.SIGINT, _exit)
 
@@ -81,6 +86,7 @@ def main(config):
     """Set up the resource provider for this compute and start
     the main loop.
     """
+    global LOCK_INVENTORY
     session = clients.PrefixedSession(prefix_url=config['placement']['endpoint'])
     session.headers.update({'x-auth-token': 'admin',
                             'openstack-api-version': 'placement latest',
@@ -99,8 +105,37 @@ def main(config):
 
     generation = _create_resource_provider(session, COMPUTE_UUID)
     _set_inventory(session, COMPUTE_UUID, generation, inventories_dict)
+    LOCK_INVENTORY = _create_lock_inventory(
+        session, COMPUTE_UUID, inventories_dict)
 
     main_loop(config, COMPUTE_UUID)
+
+
+def _create_lock_inventory(session, rp_uuid, inventories):
+    """Return a function that will lock inventory for this rp."""
+    def _lock_inventory():
+        rp_url = '/resource_providers/%s' % rp_uuid
+        inv_url = rp_url + '/' + 'inventories'
+        resp = session.get(rp_url)
+        if resp:
+            data = resp.json()
+            generation = data['generation']
+        else:
+            _print('failed to lock inventory, no rp')
+            return False
+        inventories['VCPU']['reserved'] = inventories['VCPU']['total']
+        data = {
+            'inventories': inventories,
+            'resource_provider_generation': generation,
+        }
+        resp = session.put(inv_url, json=data)
+        if resp:
+            _print('locking inventory by reserving VCPU')
+            return True
+        else:
+            _print('failed to lock inventory, no write inv')
+            return False
+    return _lock_inventory
 
 
 def _calculate_inventory():
