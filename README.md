@@ -6,7 +6,7 @@ something that needs to be tweaked or fixed before things work.
 This repository provides a toy compute workload scheduler using
 OpenStack
 [placement](https://developer.openstack.org/api-ref/placement/) to
-pick targets (via `scheduler.py` selecting and `compute.py`
+pick targets (via `eschedule` selecting and `compute.py`
 accepting), [etcd](https://coreos.com/etcd/) as a transport, and the
 `virt-install` tool from [virt-manager](https://virt-manager.org/)
 to run simple VMs.
@@ -46,12 +46,11 @@ possible to concurrently launch multiple VMs. More importantly it
 means that concurent requests to launch are not lost (this was
 true in earlier versions).
 
-`schedule.py` accepts an input of resource requirements, requests
-allocation candidates from placement, attempts to claim the first
-one and if successful puts a value to the etcd key associated with
-the target compute node. The value is the resource requirements, the
-instance uuid and an image reference. Networking and ssh keypairs
-are left out of the picture for now.
+The console-script `eschedule` accepts an input of resource
+requirements, requests allocation candidates from placement,
+attempts to claim the first one and if successful puts a value to
+the etcd key associated with the target compute node. The value is
+the resource requirements, the instance uuid and an image reference.
 
 `compute.py` notices the new value on the watched key, retrieves a
 copy of the image, launches a VM using `virt-install`, and sets a
@@ -102,7 +101,8 @@ resize: False
 
 Start a `compute.py` on one or more hosts. Each host must have
 the python requirements, the `virt-install` related tools, and
-a `compute.yaml` pointing to placement and etcd.
+a `compute.yaml` pointing to placement and etcd. You can install
+the python requirements with `python setup.py develop`.
 
 ```
 python compute.py
@@ -127,14 +127,14 @@ will be (re)set to whatever is accurately. When `compute.py` gets a
 it is started (with the same uuid), reserved will be cleared.
 
 Once `compute.py` is running, we can try to schedule a workload.
-`schedule.py` can run from any host that has network access to the
+`eschedule` can run from any host that has network access to the
 placement and etcd servers. Modify `schedule.yaml` as required.
 
 ```
-python schedule.py 'resources=VCPU:1,DISK_GB:1,MEMORY_MB:256'
+eschedule 'resources=VCPU:1,DISK_GB:1,MEMORY_MB:256'
 ```
 
-The output will look something like this in `schedule.py`:
+The output will look something like this from `eschedule`:
 
 ```
 NOTIFIED TARGET, b8756be5-a30d-4311-920c-0ad996367a8e, \
@@ -155,16 +155,16 @@ or because the resource requirements are too strict it will look
 like this:
 
 ```
-python schedule.py \
+eschedule \
   'resources=VCPU:1,DISK_GB:1,MEMORY_MB:256&required=MISC_SHARES_VIA_AGGREGATE'
 NO ALLOCATIONS LEFT
 ```
 
 After an instance is booted its IP address is put back in etcd, which you can
-query by giving the instance uuid to schedule.py:
+query by giving the instance uuid to `eschedule`:
 
 ```
-python schedule.py d578fb7c-7787-4e73-b69a-a7b3ef9bf73a
+eschedule d578fb7c-7787-4e73-b69a-a7b3ef9bf73a
 ```
 
 By default the guest IP is only accessible from the host. If you define
@@ -174,7 +174,7 @@ a bridge interface in `compute.yaml` this can be worked around. See
 You can destroy an instance by:
 
 ```
-python schedule.py destroy d578fb7c-7787-4e73-b69a-a7b3ef9bf73a
+eschedule destroy d578fb7c-7787-4e73-b69a-a7b3ef9bf73a
 ```
 
 This will destroy and undefine it on the host, removing the disk,

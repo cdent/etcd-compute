@@ -1,4 +1,3 @@
-
 import copy
 import json
 import sys
@@ -138,9 +137,9 @@ def _schedule(session, data):
     return False
 
 
-if __name__ == '__main__':
+def run():
+    global CLIENT, CONFIG
     config = conf.configure(CONFIG, 'schedule.yaml')
-    print(config)
     if config['etcd']:
         CLIENT = etcd3.client(**config['etcd'])
     else:
