@@ -57,12 +57,13 @@ class MySerializer(serialize.Serializer):
 
 KEY = '/hosts'
 SLEEP = 1
-COMPUTE_UUID = str(uuid.uuid4())
 CLIENT = None
+COMPUTE_UUID = None
 
 
 # default config
 CONFIG = {
+    'uuid': str(uuid.uuid4()),
     'placement': {
         'endpoint': 'http://localhost:8080',
     },
@@ -86,7 +87,9 @@ def main(config):
     """Set up the resource provider for this compute and start
     the main loop.
     """
-    global LOCK_INVENTORY
+    global LOCK_INVENTORY, COMPUTE_UUID
+    compute_uuid = config['uuid']
+    COMPUTE_UUID = compute_uuid
     session = clients.PrefixedSession(prefix_url=config['placement']['endpoint'])
     session.headers.update({'x-auth-token': 'admin',
                             'openstack-api-version': 'placement latest',
@@ -103,12 +106,12 @@ def main(config):
             # For now use defaults for the rest of the fields
         }
 
-    generation = _create_resource_provider(session, COMPUTE_UUID)
-    _set_inventory(session, COMPUTE_UUID, generation, inventories_dict)
+    generation = _create_resource_provider(session, compute_uuid)
+    _set_inventory(session, compute_uuid, generation, inventories_dict)
     LOCK_INVENTORY = _create_lock_inventory(
-        session, COMPUTE_UUID, inventories_dict)
+        session, compute_uuid, inventories_dict)
 
-    main_loop(config, COMPUTE_UUID)
+    main_loop(config, compute_uuid)
 
 
 def _create_lock_inventory(session, rp_uuid, inventories):
@@ -221,9 +224,10 @@ def _handle_new(config, data):
 
 
 def _spawn(config, data):
+    compute_uuid = config['uuid']
     image = data['image']
     instance = data['instance']
-    allocations = data['allocations'][COMPUTE_UUID]['resources']
+    allocations = data['allocations'][compute_uuid]['resources']
     _print(allocations)
     memory = allocations['MEMORY_MB']
     vcpu = allocations['VCPU']

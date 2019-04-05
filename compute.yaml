@@ -1,3 +1,6 @@
+# Uncomment and set this if you want to reuse a known uuid
+# for compute.
+uuid: c1a6523e-c50a-42c2-8952-f2d3a8479e99
 etcd:
   host: ds1
 placement:
