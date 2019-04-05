@@ -6,7 +6,7 @@ something that needs to be tweaked or fixed before things work.
 This repository provides a toy compute workload scheduler using
 OpenStack
 [placement](https://developer.openstack.org/api-ref/placement/) to
-pick targets (via `eschedule` selecting and `compute.py`
+pick targets (via `eschedule` selecting and `ecompute`
 accepting), [etcd](https://coreos.com/etcd/) as a transport, and the
 `virt-install` tool from [virt-manager](https://virt-manager.org/)
 to run simple VMs.
@@ -36,7 +36,7 @@ watchers to notify the computes.
 A placement service runs, also in a container, talking to a
 database.
 
-One or more `compute.py` processes start up and register themselves
+One or more `ecompute` processes start up and register themselves
 as resource providers with some inventory (calculated via the python
 `psutil` package) and then watch for new data at keys associated
 with themselves within `etcd`. A pool of workers is also started.
@@ -52,7 +52,7 @@ attempts to claim the first one and if successful puts a value to
 the etcd key associated with the target compute node. The value is
 the resource requirements, the instance uuid and an image reference.
 
-`compute.py` notices the new value on the watched key, retrieves a
+`ecompute` notices the new value on the watched key, retrieves a
 copy of the image, launches a VM using `virt-install`, and sets a
 key back on `etcd` saying so, and recording the IP of the guest.
 
@@ -78,7 +78,7 @@ sudo ip addr add 169.254.169.254 dev virbr0
 sudo python md_server/mdserver/server.py mdserver.conf &
 ```
 
-Configure `compute.py` by creating a `compute.yaml` in the same
+Configure `ecompute` by creating a `compute.yaml` in the same
 directory, looking something like this:
 
 ```yaml
@@ -99,34 +99,35 @@ the reporting of disk usage inaccurate) add the following to
 resize: False
 ```
 
-Start a `compute.py` on one or more hosts. Each host must have
+Start `ecompute` on one or more hosts. Each host must have
 the python requirements, the `virt-install` related tools, and
 a `compute.yaml` pointing to placement and etcd. You can install
-the python requirements with `python setup.py develop`.
+the python requirements and the `ecompute` and `eschedule` console
+scripts with `python setup.py develop`.
 
 ```
-python compute.py
+ecompute
 ```
 
-Because `compute.py` inspects the system for a real inventory, you
+Because `ecompute` inspects the system for a real inventory, you
 end up multiple-booking inventory if you have more than one
-`compute.py` on same host, but it is possible to do so for testing.
+`ecompute` on same host, but it is possible to do so for testing.
 
-By default, each time a `compute.py` is started a new resource
+By default, each time a `ecompute` is started a new resource
 provider is created. This means that there can be orphaned providers
 in placement that will be scheduled to, but don't have any
 listeners. You can work around this by calling
 `delete from resource_providers;` in the database, as required.
 
-Or (new feature!), if `uuid` in `compute.yaml` i set to a specific
-value, that value will be used each time `compute.py` is started. If
+**Or (new feature!)**, if `uuid` in `compute.yaml` is set to a specific
+value, that value will be used each time `ecompute` is started. If
 a resource provider with that uuid already exists, it's inventory
-will be (re)set to whatever is accurately. When `compute.py` gets a
+will be (re)set to whatever is accurately. When `ecompute` gets a
 `SIGINT` or Ctrl-C it will lock its inventory by setting the
 `reserved` value on the `VCPU` inventory to equal `total`. Next time
 it is started (with the same uuid), reserved will be cleared.
 
-Once `compute.py` is running, we can try to schedule a workload.
+Once `ecompute` is running, we can try to schedule a workload.
 `eschedule` can run from any host that has network access to the
 placement and etcd servers. Modify `schedule.yaml` as required.
 
@@ -141,7 +142,7 @@ NOTIFIED TARGET, b8756be5-a30d-4311-920c-0ad996367a8e, \
   OF INSTANCE d578fb7c-7787-4e73-b69a-a7b3ef9bf73a
 ```
 
-And in `compute.py`:
+And in `ecompute`:
 
 ```
 INSTANTIATE INSTANCE d578fb7c-7787-4e73-b69a-a7b3ef9bf73a \

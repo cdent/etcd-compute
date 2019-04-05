@@ -25,6 +25,9 @@ setup(
         'psutil',
     ],
     entry_points = {
-        'console_scripts': ['eschedule=ecomp.schedule:run'],
+        'console_scripts': [
+            'eschedule=ecomp.schedule:run',
+            'ecompute=ecomp.compute:run',
+        ],
     }
 )

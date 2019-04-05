@@ -379,7 +379,8 @@ def _configure():
         return {}
 
 
-if __name__ == '__main__':
+def run():
+    global CONFIG, CLIENT
     config = conf.configure(CONFIG, 'compute.yaml')
     _print(config)
     if config['etcd']:
