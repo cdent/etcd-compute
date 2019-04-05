@@ -1,3 +1,5 @@
+# Verbose logging
+OS_DEFAULT__DEBUG=True
 # use an internal database
 # create tables
 OS_PLACEMENT_DATABASE__SYNC_ON_STARTUP=True
