@@ -29,7 +29,12 @@ from ecomp import conf
 
 
 # Have a tidy exit on signt
+LOCK_INVENTORY = lambda: sys.exit(1)
 def _exit(*args):
+    global LOCK_INVENTORY
+    # Only lock once, from the parent.
+    if multiprocessing.active_children():
+        LOCK_INVENTORY()
     sys.exit(args[0])
 signal.signal(signal.SIGINT, _exit)
 
@@ -52,12 +57,13 @@ class MySerializer(serialize.Serializer):
 
 KEY = '/hosts'
 SLEEP = 1
-COMPUTE_UUID = str(uuid.uuid4())
 CLIENT = None
+COMPUTE_UUID = None
 
 
 # default config
 CONFIG = {
+    'uuid': str(uuid.uuid4()),
     'placement': {
         'endpoint': 'http://localhost:8080',
     },
@@ -81,6 +87,9 @@ def main(config):
     """Set up the resource provider for this compute and start
     the main loop.
     """
+    global LOCK_INVENTORY, COMPUTE_UUID
+    compute_uuid = config['uuid']
+    COMPUTE_UUID = compute_uuid
     session = clients.PrefixedSession(prefix_url=config['placement']['endpoint'])
     session.headers.update({'x-auth-token': 'admin',
                             'openstack-api-version': 'placement latest',
@@ -97,10 +106,57 @@ def main(config):
             # For now use defaults for the rest of the fields
         }
 
-    generation = _create_resource_provider(session, COMPUTE_UUID)
-    _set_inventory(session, COMPUTE_UUID, generation, inventories_dict)
+    if not confirm_resource_provider(session, compute_uuid, inventories_dict):
+        generation = _create_resource_provider(session, compute_uuid)
+        _set_inventory(session, compute_uuid, generation, inventories_dict)
 
-    main_loop(config, COMPUTE_UUID)
+    LOCK_INVENTORY = _create_lock_inventory(
+        session, compute_uuid, inventories_dict)
+
+    main_loop(config, compute_uuid)
+
+
+def confirm_resource_provider(session, rp_uuid, inventories):
+    """Check for resource provider and reset inventory."""
+    url = '/resource_providers/%s/usages' % rp_uuid
+    resp = session.get(url)
+    if resp:
+        data = resp.json()
+        generation = data['resource_provider_generation']
+        usage = ', '.join(
+            ['%s: %s' % (rc, value) for rc, value in data['usages'].items()])
+        _print('Existing resource provider with gen %s found with usages: %s.' % (
+            generation, usage))
+        _set_inventory(session, rp_uuid, generation, inventories)
+        return True
+    return False
+
+
+def _create_lock_inventory(session, rp_uuid, inventories):
+    """Return a function that will lock inventory for this rp."""
+    def _lock_inventory():
+        rp_url = '/resource_providers/%s' % rp_uuid
+        inv_url = rp_url + '/' + 'inventories'
+        resp = session.get(rp_url)
+        if resp:
+            data = resp.json()
+            generation = data['generation']
+        else:
+            _print('failed to lock inventory, no rp')
+            return False
+        inventories['VCPU']['reserved'] = inventories['VCPU']['total']
+        data = {
+            'inventories': inventories,
+            'resource_provider_generation': generation,
+        }
+        resp = session.put(inv_url, json=data)
+        if resp:
+            _print('locking inventory by reserving VCPU')
+            return True
+        else:
+            _print('failed to lock inventory, no write inv')
+            return False
+    return _lock_inventory
 
 
 def _calculate_inventory():
@@ -186,9 +242,10 @@ def _handle_new(config, data):
 
 
 def _spawn(config, data):
+    compute_uuid = config['uuid']
     image = data['image']
     instance = data['instance']
-    allocations = data['allocations'][COMPUTE_UUID]['resources']
+    allocations = data['allocations'][compute_uuid]['resources']
     _print(allocations)
     memory = allocations['MEMORY_MB']
     vcpu = allocations['VCPU']
@@ -220,6 +277,8 @@ def _destroy(instance):
     if dom:
         dom.destroy()
         dom.undefine()
+        img = '%s.img' % instance
+        os.unlink(img)
 
 
 def _get_ip(instance):
