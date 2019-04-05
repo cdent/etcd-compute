@@ -112,10 +112,19 @@ Because `compute.py` inspects the system for a real inventory, you
 end up multiple-booking inventory if you have more than one
 `compute.py` on same host, but it is possible to do so for testing.
 
-Each time a `compute.py` is started a new resource provider is
-created. This means that there can be orphaned providers in
-placement that will be scheduled to, but don't have any listeners.
-Work around this by `delete from resource_providers;` as required.
+By default, each time a `compute.py` is started a new resource
+provider is created. This means that there can be orphaned providers
+in placement that will be scheduled to, but don't have any
+listeners. You can work around this by calling
+`delete from resource_providers;` in the database, as required.
+
+Or (new feature!), if `uuid` in `compute.yaml` i set to a specific
+value, that value will be used each time `compute.py` is started. If
+a resource provider with that uuid already exists, it's inventory
+will be (re)set to whatever is accurately. When `compute.py` gets a
+`SIGINT` or Ctrl-C it will lock its inventory by setting the
+`reserved` value on the `VCPU` inventory to equal `total`. Next time
+it is started (with the same uuid), reserved will be cleared.
 
 Once `compute.py` is running, we can try to schedule a workload.
 `schedule.py` can run from any host that has network access to the
@@ -187,8 +196,6 @@ cleaned up. You'll want to take care of that yourself.
   should be removed.
 * Asking to destroy a VM while it is being built has not been
   tested and is likely to go poorly.
-* When a compute.py shuts down, its resource provider should be
-  disabled, removed, what?
 
 # Concepts
 
