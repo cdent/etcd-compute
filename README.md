@@ -177,9 +177,9 @@ You can destroy an instance by:
 python schedule.py destroy d578fb7c-7787-4e73-b69a-a7b3ef9bf73a
 ```
 
-This will destroy and undefine it on the host, and clear the allocations in
-placement. You can also use `virsh` to destroy VMs, but this will
-not clean up allocations.
+This will destroy and undefine it on the host, removing the disk,
+and clear the allocations in placement. You can also use `virsh` to
+destroy VMs, but this will not clean up allocations.
 
 **Note**: The database and etcd data (in `/data/etcd`) are not
 cleaned up. You'll want to take care of that yourself.
@@ -192,8 +192,6 @@ cleaned up. You'll want to take care of that yourself.
   this is cumbersome and weird.
 * Switch all the subprocess calls to using the python libvirt
   package directly.
-* After a VM is destroyed the image is left lying around. That
-  should be removed.
 * Asking to destroy a VM while it is being built has not been
   tested and is likely to go poorly.
 

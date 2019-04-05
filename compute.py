@@ -277,6 +277,8 @@ def _destroy(instance):
     if dom:
         dom.destroy()
         dom.undefine()
+        img = '%s.img' % instance
+        os.unlink(img)
 
 
 def _get_ip(instance):
