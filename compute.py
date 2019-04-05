@@ -10,8 +10,6 @@ import signal
 import subprocess
 import sys
 import time
-import threading
-from urllib import parse
 import uuid
 
 import cachecontrol
@@ -28,38 +26,14 @@ from ecomp import clients
 from ecomp import conf
 
 
-# Have a tidy exit on signt
-LOCK_INVENTORY = lambda: sys.exit(1)
-def _exit(*args):
-    global LOCK_INVENTORY
-    # Only lock once, from the parent.
-    if multiprocessing.active_children():
-        LOCK_INVENTORY()
-    sys.exit(args[0])
-signal.signal(signal.SIGINT, _exit)
-
-
 # Locked shared around the children.
 LOCK = multiprocessing.Lock()
-
-# deal with size limitations in CacheControl
-class MySerializer(serialize.Serializer):
-
-    def _loads_v4(self, request, data):
-        try:
-            cached = msgpack.loads(
-                data, encoding="utf-8", max_bin_len=2147483647)
-        except ValueError:
-            return
-
-        return self.prepare_response(request, cached)
-
+LOCK_INVENTORY = lambda: sys.exit(1)  # noqa
 
 KEY = '/hosts'
 SLEEP = 1
 CLIENT = None
 COMPUTE_UUID = None
-
 
 # default config
 CONFIG = {
@@ -75,12 +49,37 @@ CONFIG = {
     # By default we only use the 'default' libvirt network.
     # If bridge is defined that will be used too.
     'bridge': None,
-
 }
 
 
+def _exit(*args):
+    global LOCK_INVENTORY
+    # Only lock once, from the parent.
+    if multiprocessing.active_children():
+        LOCK_INVENTORY()
+    sys.exit(args[0])
+
+
+# Have a tidy exit on signt
+signal.signal(signal.SIGINT, _exit)
+
+
+# deal with size limitations in CacheControl
+class MySerializer(serialize.Serializer):
+
+    def _loads_v4(self, request, data):
+        try:
+            cached = msgpack.loads(
+                data, encoding="utf-8", max_bin_len=2147483647)
+        except ValueError:
+            return
+
+        return self.prepare_response(request, cached)
+
+
 def _print(output):
-    print('%s: PID: %s [%s] %s' % (time.time(), os.getpid(), COMPUTE_UUID, output))
+    print('%s: PID: %s [%s] %s' % (
+        time.time(), os.getpid(), COMPUTE_UUID, output))
 
 
 def main(config):
@@ -90,7 +89,8 @@ def main(config):
     global LOCK_INVENTORY, COMPUTE_UUID
     compute_uuid = config['uuid']
     COMPUTE_UUID = compute_uuid
-    session = clients.PrefixedSession(prefix_url=config['placement']['endpoint'])
+    session = clients.PrefixedSession(
+        prefix_url=config['placement']['endpoint'])
     session.headers.update({'x-auth-token': 'admin',
                             'openstack-api-version': 'placement latest',
                             'accept': 'application/json',
@@ -125,8 +125,8 @@ def confirm_resource_provider(session, rp_uuid, inventories):
         generation = data['resource_provider_generation']
         usage = ', '.join(
             ['%s: %s' % (rc, value) for rc, value in data['usages'].items()])
-        _print('Existing resource provider with gen %s found with usages: %s.' % (
-            generation, usage))
+        _print('Existing resource provider with gen %s '
+               'found with usages: %s.' % (generation, usage))
         _set_inventory(session, rp_uuid, generation, inventories)
         return True
     return False
@@ -178,7 +178,8 @@ def handle_build(instance, response):
         _print('updating etcd for dead instance: %s' % instance)
         CLIENT.delete('/booted/%s' % instance)
     else:
-        _print('updating etcd for instance %s with ip %s' % (instance, response))
+        _print('updating etcd for instance %s with ip %s' % (
+            instance, response))
         CLIENT.put('/booted/%s' % instance, response)
 
 
@@ -225,7 +226,8 @@ def _handle_new(config, data):
         del data['instance']
         del data['image']
         # FIXME dupe
-        session = clients.PrefixedSession(prefix_url=config['placement']['endpoint'])
+        session = clients.PrefixedSession(
+            prefix_url=config['placement']['endpoint'])
         session.headers.update({'x-auth-token': 'admin',
                                 'openstack-api-version': 'placement latest',
                                 'accept': 'application/json',
@@ -336,9 +338,9 @@ def _copy_image(config, source, instance, size):
                                    source_file, dest], env=env)
         else:
             # FIXME: this makes too many assumptions about image format
-            #subprocess.check_call(['qemu-img', 'create', '-f', 'qcow2',
-            #                       '-b', source_file,
-            #                       dest])
+            # subprocess.check_call(['qemu-img', 'create', '-f', 'qcow2',
+            #                        '-b', source_file,
+            #                        dest])
             # And this is space wasteful.
             shutil.copyfile(source_file, dest)
     return dest

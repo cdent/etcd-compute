@@ -50,7 +50,8 @@ def destroy(session, instance):
         current_allocations['allocations'] = {}
         current_allocations['instance'] = instance
         current_allocations['image'] = None
-        CLIENT.put('%s/%s/%s' % (PREFIX, target, instance), json.dumps(current_allocations))
+        CLIENT.put('%s/%s/%s' % (PREFIX, target, instance),
+                   json.dumps(current_allocations))
     else:
         print('FAILED to find allocations for %s' % instance)
 
@@ -69,7 +70,8 @@ def query(instance):
 def main(config, args):
     """Establish session and call schedule."""
     # FIXME: do some real arg process
-    session = clients.PrefixedSession(prefix_url=config['placement']['endpoint'])
+    session = clients.PrefixedSession(
+        prefix_url=config['placement']['endpoint'])
     session.headers.update({'x-auth-token': 'admin',
                             'openstack-api-version': 'placement latest',
                             'accept': 'application/json',
@@ -121,7 +123,8 @@ def _schedule(session, data):
             message = copy.deepcopy(claim)
             message['instance'] = consumer
             message['image'] = image
-            CLIENT.put('%s/%s/%s' % (PREFIX, target, consumer), json.dumps(message))
+            CLIENT.put('%s/%s/%s' % (PREFIX, target, consumer),
+                       json.dumps(message))
             break
         else:
             print('CLAIM FAIL: %s' % resp.json())

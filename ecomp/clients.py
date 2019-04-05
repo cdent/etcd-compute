@@ -12,4 +12,5 @@ class PrefixedSession(requests.Session):
     def request(self, method, url, *args, **kwargs):
         if self.prefix_url:
             url = parse.urljoin(self.prefix_url, url)
-        return super(PrefixedSession, self).request(method, url, *args, **kwargs)
+        return super(PrefixedSession, self).request(
+            method, url, *args, **kwargs)
