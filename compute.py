@@ -118,12 +118,15 @@ def main(config):
 
 def confirm_resource_provider(session, rp_uuid, inventories):
     """Check for resource provider and reset inventory."""
-    url = '/resource_providers/%s' % rp_uuid
-    data = {'uuid': rp_uuid, 'name': rp_uuid}
+    url = '/resource_providers/%s/usages' % rp_uuid
     resp = session.get(url)
     if resp:
-        generation = resp.json()['generation']
-        _print('Existing resource provider with gen %s found.' % generation)
+        data = resp.json()
+        generation = data['resource_provider_generation']
+        usage = ', '.join(
+            ['%s: %s' % (rc, value) for rc, value in data['usages'].items()])
+        _print('Existing resource provider with gen %s found with usages: %s.' % (
+            generation, usage))
         _set_inventory(session, rp_uuid, generation, inventories)
         return True
     return False
