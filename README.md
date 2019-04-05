@@ -131,7 +131,7 @@ Once `compute.py` is running, we can try to schedule a workload.
 placement and etcd servers. Modify `schedule.yaml` as required.
 
 ```
-python schedule.py 'resources=VCPU:1,DISK_GB:1,MEMORY_MB:5'
+python schedule.py 'resources=VCPU:1,DISK_GB:1,MEMORY_MB:256'
 ```
 
 The output will look something like this in `schedule.py`:
@@ -147,7 +147,7 @@ And in `compute.py`:
 INSTANTIATE INSTANCE d578fb7c-7787-4e73-b69a-a7b3ef9bf73a \
   WITH IMAGE e9bedb97-917a-4f4e-9a69-8ad21840267f
 ALLOCATIONS ARE {'b8756be5-a30d-4311-920c-0ad996367a8e': \
-  {'resources': {'VCPU': 1, 'DISK_GB': 1, 'MEMORY_MB': 5}}}
+  {'resources': {'VCPU': 1, 'DISK_GB': 1, 'MEMORY_MB': 256}}}
 ```
 
 If there is no capacity available, either because there's none left
@@ -156,7 +156,7 @@ like this:
 
 ```
 python schedule.py \
-  'resources=VCPU:1,DISK_GB:1,MEMORY_MB:5&required=MISC_SHARES_VIA_AGGREGATE' 
+  'resources=VCPU:1,DISK_GB:1,MEMORY_MB:256&required=MISC_SHARES_VIA_AGGREGATE'
 NO ALLOCATIONS LEFT
 ```
 

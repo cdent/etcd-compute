@@ -12,7 +12,6 @@ from ecomp import clients
 # Replace with service catalog, but since right now we haven't
 # got one, raw.
 PREFIX = '/hosts'
-PLACEMENT = 'http://localhost:8080'
 IMAGE = 'http://download.cirros-cloud.net/0.3.6/cirros-0.3.6-x86_64-disk.img'
 CLIENT = None
 
