@@ -1,10 +1,10 @@
 # use an internal database
 # create tables
-DB_SYNC=True
+OS_PLACEMENT_DATABASE__SYNC_ON_STARTUP=True
 # use simple auth (each request gets a header of "x-auth-token: admin")
-AUTH_STRATEGY=noauth2
+OS_API__AUTH_STRATEGY=noauth2
 # We need to use an external database. The interal sqlite3 database
 # can't handle any level of concurrency and has write locks.
-DB_STRING=postgresql+psycopg2://cdent@192.168.1.76/placement?client_encoding=utf8
+OS_PLACEMENT_DATABASE__CONNECTION=postgresql+psycopg2://cdent@192.168.1.76/placement?client_encoding=utf8
 # we want to target different computes, spread, not pack
-OS_PLACEMENT_RANDOMIZE_ALLOCATION_CANDIDATES=True
+OS_PLACEMENT__RANDOMIZE_ALLOCATION_CANDIDATES=True
