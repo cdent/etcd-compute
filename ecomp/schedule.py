@@ -23,14 +23,14 @@ CONFIG = {
 }
 
 
-def schedule(session, resources):
+def schedule(session, resources, image):
     """Given resources, find some hosts."""
     print(resources)
     url = '/allocation_candidates?%s' % resources
     resp = session.get(url)
     data = resp.json()
     if resp:
-        success = _schedule(session, data)
+        success = _schedule(session, data, image)
         if not success:
             print('FAIL: no allocation available')
             sys.exit(1)
@@ -75,20 +75,27 @@ def main(config, args):
                             'openstack-api-version': 'placement latest',
                             'accept': 'application/json',
                             'content-type': 'application/json'})
-    if len(args) == 2:
-        command, instance = args
-        if command == 'destroy':
-            destroy(session, instance)
+    if args:
+        if 'resources' in args[0]:
+            try:
+                image = args[1]
+            except IndexError:
+                image = IMAGE
+            schedule(session, args[0], image)
+        elif len(args) == 2:
+            command, instance = args
+            if command == 'destroy':
+                destroy(session, instance)
+            else:
+                print('Unknown command')
+                sys.exit(1)
         else:
-            print('Unknown command')
-            sys.exit(1)
-    elif 'resources' in args[0]:
-        schedule(session, args[0])
+            query(args[0])
     else:
-        query(args[0])
+        print('Write some help!')
 
 
-def _schedule(session, data):
+def _schedule(session, data, image):
     """Try to schedule to one host.
 
     We start at the top of the available allocations and try to claim
@@ -100,7 +107,6 @@ def _schedule(session, data):
     # Not (yet) used.
     # provider_summaries = data['provider_summaries']
     consumer = str(uuid.uuid4())
-    image = IMAGE
     target = None
     while True:
         try:
