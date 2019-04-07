@@ -1,20 +1,21 @@
 
-**Note**: This is a toy. Be aware that the code and the README won't
-always be in sync, following the instructions will likely expose
-something that needs to be tweaked or fixed before things work.
+**Note**: This started out life a toy. Be aware that the code and
+the README won't always be in sync, following the instructions will
+likely expose something that needs to be tweaked or fixed before
+things work. See two related blog posts for more information:
 
-This repository provides a toy compute workload scheduler using
+* [etcd + placement + virt-install →
+  compute](https://anticdent.org/etcd-placement-virt-install-compute.html)
+* [etcd-compute
+  refresh](https://anticdent.org/etcd-compute-refresh.html)
+
+This repository provides a compute workload scheduler using
 OpenStack
 [placement](https://developer.openstack.org/api-ref/placement/) to
 pick targets (via `eschedule` selecting and `ecompute`
 accepting), [etcd](https://coreos.com/etcd/) as a transport, and the
 `virt-install` tool from [virt-manager](https://virt-manager.org/)
 to run simple VMs.
-
-_It is a toy because there's very little in the way of error
-handling, networking is very limited, and concepts like
-authentication, authorization, configuration, migration, consoles
-and lots of other stuff that real people use is entirely left out._
 
 It has been built to experiment with the idea of using placement and
 etcd as the main motors and state maintainers of a compute service
@@ -47,10 +48,11 @@ means that concurent requests to launch are not lost (this was
 true in earlier versions).
 
 The console-script `eschedule` accepts an input of resource
-requirements, requests allocation candidates from placement,
-attempts to claim the first one and if successful puts a value to
-the etcd key associated with the target compute node. The value is
-the resource requirements, the instance uuid and an image reference.
+requirements and an optional image URL, requests allocation
+candidates from placement, attempts to claim the first one and if
+successful puts a value to the etcd key associated with the target
+compute node. The value is the resource requirements, the instance
+uuid and an image reference.
 
 `ecompute` notices the new value on the watched key, retrieves a
 copy of the image, launches a VM using `virt-install`, and sets a
@@ -58,20 +60,21 @@ key back on `etcd` saying so, and recording the IP of the guest.
 
 A simple metadata server runs to keep booting of cloud images fast,
 and if the image supports it, let cloud-init do things like set an
-authorized ssh key.
+authorized ssh key. This should [be
+replaced](/cdent/etcd-compute/issues/6).
 
 # Trying It
 
 To try it out yourself you need docker and a database, the code
 within this repo, and the Python requirements listed in
-`requirements.txt`. The docker containers provide `etcd` and placement
-itself.
+`setup.py` (`python setup.py develop` will get them). The docker
+containers provide etcd and placement.
 
 The containers can be started by running `docker.sh`. Placement will
 be at `http://localhost:8080/`.
 
 Edit `mdserver.conf` as required and start the metadata server with
-(this will be improved):
+(this will be improved or [replaced](/cdent/etcd-compute/issues/6])):
 
 ```
 sudo ip addr add 169.254.169.254 dev virbr0
@@ -113,7 +116,7 @@ Because `ecompute` inspects the system for a real inventory, you
 end up multiple-booking inventory if you have more than one
 `ecompute` on same host, but it is possible to do so for testing.
 
-By default, each time a `ecompute` is started a new resource
+By default, each time an `ecompute` is started a new resource
 provider is created. This means that there can be orphaned providers
 in placement that will be scheduled to, but don't have any
 listeners. You can work around this by calling
@@ -122,10 +125,11 @@ listeners. You can work around this by calling
 **Or (new feature!)**, if `uuid` in `compute.yaml` is set to a specific
 value, that value will be used each time `ecompute` is started. If
 a resource provider with that uuid already exists, it's inventory
-will be (re)set to whatever is accurately. When `ecompute` gets a
+will be (re)set to whatever is accurate. When `ecompute` gets a
 `SIGINT` or Ctrl-C it will lock its inventory by setting the
-`reserved` value on the `VCPU` inventory to equal `total`. Next time
-it is started (with the same uuid), reserved will be cleared.
+`reserved` value on the `VCPU` inventory to equal `total` and then
+exit. Next time it is started (with the same uuid), reserved will be
+cleared.
 
 Once `ecompute` is running, we can try to schedule a workload.
 `eschedule` can run from any host that has network access to the
@@ -135,14 +139,23 @@ placement and etcd servers. Modify `schedule.yaml` as required.
 eschedule 'resources=VCPU:1,DISK_GB:1,MEMORY_MB:256'
 ```
 
-The output will look something like this from `eschedule`:
+You can also request an image:
+
+```
+eschedule resources=VCPU:1,MEMORY_MB:256,DISK_GB:1 \
+    https://cloud-images.ubuntu.com/bionic/current/bionic-server-cloudimg-amd64.img
+```
+
+If no image is specified Cirros 0.3.6 is used.
+
+The output from `eschedule` will look something like this:
 
 ```
 NOTIFIED TARGET, b8756be5-a30d-4311-920c-0ad996367a8e, \
   OF INSTANCE d578fb7c-7787-4e73-b69a-a7b3ef9bf73a
 ```
 
-And in `ecompute`:
+And from `ecompute`:
 
 ```
 INSTANTIATE INSTANCE d578fb7c-7787-4e73-b69a-a7b3ef9bf73a \
@@ -161,8 +174,8 @@ eschedule \
 NO ALLOCATIONS LEFT
 ```
 
-After an instance is booted its IP address is put back in etcd, which you can
-query by giving the instance uuid to `eschedule`:
+After an instance is booted its IP address is put back in etcd,
+which you can query by giving the instance uuid to `eschedule`:
 
 ```
 eschedule d578fb7c-7787-4e73-b69a-a7b3ef9bf73a
@@ -178,7 +191,7 @@ You can destroy an instance by:
 eschedule destroy d578fb7c-7787-4e73-b69a-a7b3ef9bf73a
 ```
 
-This will destroy and undefine it on the host, removing the disk,
+This will destroy and undefine it on the host, remove the disk,
 and clear the allocations in placement. You can also use `virsh` to
 destroy VMs, but this will not clean up allocations.
 
@@ -219,3 +232,4 @@ attention:
 * Making networking more useful.
 * Error handling.
 * Interacting with libvirt and avoiding subprocess calls.
+* Properly choose and launching images with user-data.
