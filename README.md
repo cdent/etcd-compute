@@ -2,12 +2,16 @@
 **Note**: This started out life a toy. Be aware that the code and
 the README won't always be in sync, following the instructions will
 likely expose something that needs to be tweaked or fixed before
-things work. See two related blog posts for more information:
+things work. Some blog postings have been written which provide
+a bit more guidance but also show how there is much more to be done
+before the information here is complete:
 
 * [etcd + placement + virt-install →
   compute](https://anticdent.org/etcd-placement-virt-install-compute.html)
 * [etcd-compute
   refresh](https://anticdent.org/etcd-compute-refresh.html)
+* [Playing with etcd-compute](https://blog.leafe.com/playing-with-etcd-compute/)
+* [More fun with etcd-compute](https://blog.leafe.com/more-fun-with-etcd-compute/)
 
 This repository provides a compute workload scheduler using
 OpenStack
