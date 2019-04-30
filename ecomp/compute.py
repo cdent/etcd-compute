@@ -193,7 +193,7 @@ def main_loop(config, compute_uuid):
     our_key = '%s/%s/' % (KEY, compute_uuid)
     events_iterator, cancel = CLIENT.watch_prefix(our_key)
 
-    cpu_count = multiprocessing.cpu_count() // 2
+    cpu_count = multiprocessing.cpu_count() // 2 or 1
     with multiprocessing.Pool(processes=cpu_count) as pool:
         for event in events_iterator:
             value = str(event.value, 'UTF-8')
