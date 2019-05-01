@@ -30,8 +30,21 @@ placing workloads.
 
 # Docker Host
 
-> _The installing docker part is left to a later revision and
-> author._
+To install docker, run the following as root:
+
+```sh
+apt install -y docker.io
+```
+
+By default, you have to run all docker commands as root. To avoid this, add
+your user to the `docker` group:
+
+```sh
+sudo usermod -a -G docker <your username>
+```
+
+You will have to exit your current session and re-connect for that to take
+effect.
 
 Once docker is running, the database used by the placement service
 must be set up and configured. You can use MySQL or PostgreSQL.
@@ -56,13 +69,13 @@ the database you configured above. If you're using MySQL it should
 look something like:
 
 ```
-OS_PLACEMENT_DATABASE__CONNECTION=mysql+pymysql://cow:secret@some.rainbow.com/placement?charset=utf8
+OS_PLACEMENT_DATABASE__CONNECTION=mysql+pymysql://cow:secret@example.com/placement?charset=utf8
 ```
 
 If PostgreSQL, this:
 
 ```
-OS_PLACEMENT_DATABASE__CONNECTION=postgresql+psycopg2://cdent@192.168.1.76/placement?client_encoding=utf8
+OS_PLACEMENT_DATABASE__CONNECTION=postgresql+psycopg2://cow:secret@example.com/placement?client_encoding=utf8
 ```
 
 Start the containers:
@@ -73,7 +86,7 @@ Start the containers:
 
 Running `docker ps` will list the resulting containers. Running
 `docker logs -f placement` will tail the logs of the placement
-container.
+container, and `docker logs -f etcd` will tail the etcd container logs.
 
 # Hypervisor Host
 
@@ -86,15 +99,18 @@ As root, install the necessary packages using `apt`:
 
 ```sh
 apt update
-apt install git libvirt-dev virtinst libguestfs-tools python3-dev \
+apt install -y git libvirt-dev virtinst libguestfs-tools python3-dev \
     libvirt-daemon libvirt-daemon-system python3-venv
 ```
 
 `libvirtd` and `dnsmasq` should now be running. A `virbr0` device
 should be present in the output of `ip a`.
 
-Create a non-root user. Add them to the `libvirt` group in
-`/etc/group`.
+Create a non-root user. Add them to the `libvirt` group by running:
+
+```sh
+sudo usermod -a -G libvirt <your username>
+```
 
 As that user, install and run the necessary Python code in a virtual
 environment:
@@ -107,9 +123,10 @@ python3 -m venv .venv
 pip install -r requirements.txt && python setup.py develop
 ```
 
-_Note_: `python setup.py develop` alone ought to install the
-requirements properly, but libvirt-python gets confused so `pip` is
-used first to work around that issue.
+_Note_: `python setup.py develop` alone ought to install the requirements
+properly, but libvirt-python gets confused so `pip` is used first to work
+around that issue. Also note that you can name your virtual environment
+whatever you like; it doesn't have to be named `.venv`.
 
 Edit `compute.yaml`. Set `uuid` to uniquely identify this node in a
 persistent way. Change the `host` to point to the host on which the
@@ -129,7 +146,7 @@ will report resource inventory to the placement service. When it is
 interrupted, it will reserve that inventory to prevent workloads
 being scheduled to this node.
 
-You may have as many hypervisors hosts as you like.
+You may have as many hypervisor hosts as you like.
 
 # Schedule Host
 
