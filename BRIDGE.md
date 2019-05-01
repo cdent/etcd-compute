@@ -11,7 +11,7 @@ There's a reasonable overview of how to do this in a [libvirt
 networking
 handbook](https://jamielinux.com/docs/libvirt-networking-handbook/bridged-network.html).
 Read that and then come back here to determine some local
-adjustments. The "Initial Steps" should be done, it in the setup of
+adjustments. The "Initial Steps" should be done, it is in the setup of
 the bridge itself where I needed to make adjustments.
 
 My test host is an Ubuntu Bionic VM hosted on an ESXi hypervisor
@@ -23,7 +23,8 @@ to promiscuous mode, otherwise DHCP frames will not reach the
 guests. In my environment setting the entire vswitch to promiscuous
 and letting the vnics inherit from that was the most straightforward
 thing. Your environment will be different but "promiscuous" is the
-mode you are looking for.
+mode you are looking for if you are nesting VMs in VMs on your own
+physical hardware.
 
 In the handbook (above) the physical interface has a static IP and
 IPV6 is supported. For the purpose of my testing, I only wanted to
@@ -77,8 +78,8 @@ resize: False
 bridge: br0
 ```
 
-This will cause a second interface to be created in VMS. The first
-interface will continue to use libvirt's built in DHCP server to
+This will cause a second interface to be created in the spawned VMs.
+The first interface will continue to use libvirt's built in DHCP server to
 provide a local-only IP.
 
 Depending on the image being booted the second interface may be
